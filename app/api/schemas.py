@@ -24,3 +24,22 @@ class AthleteResponse(BaseModel):
     id: int
     email: str
     created_at: datetime
+
+
+class MuscleContributionResponse(BaseModel):
+    muscle_name: str
+    contribution: float
+
+
+class ExerciseResponse(BaseModel):
+    id: int
+    name: str
+    description: str
+    equipment_name: str
+    movement_category: str
+    exercise_type: str
+    is_warmup_suitable: bool
+    notes: str
+    muscles: list[MuscleContributionResponse]
+    supported_set_types: list[str]
+    supported_tempos: list[str]
