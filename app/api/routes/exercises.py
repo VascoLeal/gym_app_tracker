@@ -17,7 +17,6 @@ def _to_response(exercise: Exercise) -> ExerciseResponse:
         equipment_name=exercise.equipment_name,
         movement_category=exercise.movement_category,
         exercise_type=exercise.exercise_type,
-        is_warmup_suitable=exercise.is_warmup_suitable,
         notes=exercise.notes,
         muscles=[
             MuscleContributionResponse(

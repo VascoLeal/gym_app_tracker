@@ -38,7 +38,6 @@ class ExerciseResponse(BaseModel):
     equipment_name: str
     movement_category: str
     exercise_type: str
-    is_warmup_suitable: bool
     notes: str
     muscles: list[MuscleContributionResponse]
     supported_set_types: list[str]

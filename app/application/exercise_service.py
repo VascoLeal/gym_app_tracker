@@ -12,7 +12,6 @@ def _to_domain(row: ExerciseModel) -> Exercise:
         equipment_name=row.equipment.name,
         movement_category=row.movement_category.name,
         exercise_type=row.exercise_type.name,
-        is_warmup_suitable=row.is_warmup_suitable,
         notes=row.notes,
         muscles=[
             MuscleContribution(

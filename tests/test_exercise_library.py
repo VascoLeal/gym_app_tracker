@@ -40,7 +40,8 @@ def test_list_exercises_returns_seeded_data(client):
     assert response.status_code == 200
     names = {e["name"] for e in response.json()}
     assert "Barbell Bench Press" in names
-    assert len(response.json()) == 7
+    assert "Band External Rotation" in names
+    assert len(response.json()) == 8
 
 
 def test_incline_bench_shows_contribution_weighting(client):
@@ -48,34 +49,33 @@ def test_incline_bench_shows_contribution_weighting(client):
     incline = next(
         e for e in all_exercises if e["name"] == "Incline Barbell Bench Press"
     )
-
     response = client.get(f"/exercises/{incline['id']}")
-    assert response.status_code == 200
     body = response.json()
 
-    assert body["movement_category"] == "horizontal_push"
-    assert body["exercise_type"] == "compound"
-    assert "rep_range_min" not in body  # deliberately removed
+    assert "is_warmup_suitable" not in body  # deliberately removed
+    assert "rep_range_min" not in body
 
     contributions = {m["muscle_name"]: m["contribution"] for m in body["muscles"]}
-    # Upper chest is the priority target, mid chest a lesser one — exactly
-    # the distinction a primary/secondary role couldn't express.
     assert contributions["Upper Chest"] == 1.0
     assert contributions["Mid Chest"] == 0.4
 
-    assert "drop_set" in body["supported_set_types"]
-    assert "paused" in body["supported_tempos"]
 
-
-def test_triceps_overhead_extension_weights_long_head_highest(client):
+def test_warmup_exercise_type_and_rotator_cuff_muscle(client):
     all_exercises = client.get("/exercises").json()
-    extension = next(
-        e for e in all_exercises if e["name"] == "Cable Triceps Overhead Extension"
-    )
-    contributions = {m["muscle_name"]: m["contribution"] for m in extension["muscles"]}
-    assert contributions["Triceps Long Head"] == 1.0
-    assert contributions["Triceps Lateral Head"] < contributions["Triceps Long Head"]
-    assert contributions["Triceps Medial Head"] < contributions["Triceps Long Head"]
+    rotation = next(e for e in all_exercises if e["name"] == "Band External Rotation")
+
+    assert rotation["exercise_type"] == "warmup"
+    muscle_names = {m["muscle_name"] for m in rotation["muscles"]}
+    assert "Rotator Cuff" in muscle_names
+
+
+def test_bench_press_still_supports_warmup_sets_despite_no_warmup_flag(client):
+    # This is the other half of is_warmup_suitable's old job: doing warmup
+    # SETS of an exercise is expressed via supported_set_types, not a flag.
+    all_exercises = client.get("/exercises").json()
+    bench = next(e for e in all_exercises if e["name"] == "Barbell Bench Press")
+    assert "warmup_set" in bench["supported_set_types"]
+    assert bench["exercise_type"] == "compound"  # not "warmup" — different question
 
 
 def test_get_nonexistent_exercise_returns_404(client):

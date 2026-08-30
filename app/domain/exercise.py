@@ -32,7 +32,12 @@ class Exercise:
     performed set. Those are separate future concepts per the constitution's
     domain hierarchy (§2). Notably: no rep range here — that's a property
     of how an exercise is PRESCRIBED in a specific mesocycle, not of the
-    exercise itself, so it belongs on the future Set Prescription entity."""
+    exercise itself, so it belongs on the future Set Prescription entity.
+    No is_warmup_suitable flag either — that job is split between
+    exercise_type="warmup" (this exercise IS warmup/activation work) and
+    supported_set_types containing "warmup_set" (this exercise CAN be
+    ramped into with warmup sets) — two different questions that a single
+    boolean was conflating."""
 
     id: int | None
     name: str
@@ -40,7 +45,6 @@ class Exercise:
     equipment_name: str
     movement_category: str
     exercise_type: str
-    is_warmup_suitable: bool
     notes: str
     muscles: list[MuscleContribution] = field(default_factory=list)
     supported_set_types: list[str] = field(default_factory=list)

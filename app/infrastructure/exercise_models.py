@@ -71,7 +71,6 @@ class ExerciseModel(Base):
         ForeignKey("movement_categories.id")
     )
     exercise_type_id: Mapped[int] = mapped_column(ForeignKey("exercise_types.id"))
-    is_warmup_suitable: Mapped[bool] = mapped_column(default=False)
     notes: Mapped[str] = mapped_column(Text, default="")
 
     equipment: Mapped[EquipmentModel] = relationship()

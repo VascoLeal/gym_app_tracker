@@ -3,9 +3,17 @@ Idempotent seed data. Safe to run repeatedly — checks for existing rows
 before inserting.
 
 Still a SMALL, illustrative set of exercises to prove the schema works,
-not the real exercise library content. The two "extension" exercises
-(incline bench, triceps overhead extension) are included specifically to
-demonstrate the muscle contribution-weighting the schema now supports.
+not the real exercise library content.
+
+Muscle taxonomy: muscle_group is one consistent, curated set of real
+muscle groups (chest/back/shoulders/biceps/triceps/core/glutes/
+quadriceps/hamstrings/calves/tibialis), plus full_body/other as
+catch-alls for exercises that don't isolate anything specific. Every
+group gets comparable internal granularity via the `name` column — no
+group is left as a single flat entry while others get split into parts.
+Tibialis is the one deliberate exception: it only gets one named part
+(Tibialis Anterior) because that's genuinely the only commonly-trained
+part, not because I forgot to split it.
 """
 
 from sqlalchemy.orm import Session
@@ -24,26 +32,23 @@ from app.infrastructure.exercise_models import (
 )
 
 MUSCLES = [
-    ("Upper Chest", "Chest"),
-    ("Mid Chest", "Chest"),
-    ("Lower Chest", "Chest"),
-    ("Front Delts", "Shoulders"),
-    ("Lateral Delts", "Shoulders"),
-    ("Rear Delts", "Shoulders"),
-    ("Lats", "Back"),
-    ("Traps", "Back"),
-    ("Biceps Long Head", "Arms"),
-    ("Biceps Short Head", "Arms"),
-    ("Triceps Long Head", "Arms"),
-    ("Triceps Lateral Head", "Arms"),
-    ("Triceps Medial Head", "Arms"),
-    ("Quads", "Legs"),
-    ("Hamstrings", "Legs"),
-    ("Glutes", "Legs"),
-    ("Calves", "Legs"),
-    ("Abs", "Core"),
-    ("Full Body", "Full Body"),
-    ("Other", "Other"),
+    ("Upper Chest", "chest"), ("Mid Chest", "chest"), ("Lower Chest", "chest"),
+    ("Lats", "back"), ("Traps", "back"), ("Rhomboids", "back"),
+    ("Front Delts", "shoulders"), ("Lateral Delts", "shoulders"),
+    ("Rear Delts", "shoulders"), ("Rotator Cuff", "shoulders"),
+    ("Biceps Long Head", "biceps"), ("Biceps Short Head", "biceps"),
+    ("Triceps Long Head", "triceps"), ("Triceps Lateral Head", "triceps"),
+    ("Triceps Medial Head", "triceps"),
+    ("Upper Abs", "core"), ("Lower Abs", "core"), ("Obliques", "core"),
+    ("Glute Max", "glutes"), ("Glute Med", "glutes"), ("Glute Min", "glutes"),
+    ("Rectus Femoris", "quadriceps"), ("Vastus Lateralis", "quadriceps"),
+    ("Vastus Medialis", "quadriceps"),
+    ("Biceps Femoris", "hamstrings"), ("Semitendinosus", "hamstrings"),
+    ("Semimembranosus", "hamstrings"),
+    ("Gastrocnemius", "calves"), ("Soleus", "calves"),
+    ("Tibialis Anterior", "tibialis"),
+    ("Full Body", "full_body"),
+    ("Other", "other"),
 ]
 
 EQUIPMENT = [
@@ -64,48 +69,54 @@ MOVEMENT_CATEGORIES = [
     "knee_flexion", "other",
 ]
 
-EXERCISE_TYPES = ["compound", "isolation"]
+EXERCISE_TYPES = ["compound", "isolation", "warmup"]
 
-# (name, equipment, movement_category, exercise_type, warmup_suitable,
+# (name, equipment, movement_category, exercise_type,
 #  [(muscle, contribution), ...], [set_type, ...], [tempo, ...])
 EXERCISES = [
     (
-        "Barbell Bench Press", "Barbell", "horizontal_push", "compound", False,
+        "Barbell Bench Press", "Barbell", "horizontal_push", "compound",
         [("Mid Chest", 1.0), ("Front Delts", 0.4),
          ("Triceps Lateral Head", 0.4), ("Triceps Medial Head", 0.3)],
         ["straight_set", "warmup_set", "drop_set"], ["normal", "paused"],
     ),
     (
-        "Incline Barbell Bench Press", "Barbell", "horizontal_push", "compound", False,
+        "Incline Barbell Bench Press", "Barbell", "horizontal_push", "compound",
         [("Upper Chest", 1.0), ("Mid Chest", 0.4),
          ("Front Delts", 0.5), ("Triceps Lateral Head", 0.3)],
         ["straight_set", "warmup_set", "drop_set"], ["normal", "paused"],
     ),
     (
-        "Barbell Back Squat", "Barbell", "squat_knee_dominant", "compound", False,
-        [("Quads", 1.0), ("Glutes", 0.5), ("Hamstrings", 0.3)],
+        "Barbell Back Squat", "Barbell", "squat_knee_dominant", "compound",
+        [("Rectus Femoris", 1.0), ("Vastus Lateralis", 0.9),
+         ("Glute Max", 0.5), ("Biceps Femoris", 0.3)],
         ["straight_set", "warmup_set"], ["normal", "paused"],
     ),
     (
-        "Lat Pulldown", "Cable Machine", "vertical_pull", "compound", True,
+        "Lat Pulldown", "Cable Machine", "vertical_pull", "compound",
         [("Lats", 1.0), ("Biceps Long Head", 0.4), ("Biceps Short Head", 0.4)],
         ["straight_set", "warmup_set", "drop_set", "myo_rep_set"], ["normal", "slow"],
     ),
     (
-        "Dumbbell Bicep Curl", "Dumbbell", "other", "isolation", True,
+        "Dumbbell Bicep Curl", "Dumbbell", "other", "isolation",
         [("Biceps Short Head", 1.0), ("Biceps Long Head", 0.7)],
         ["straight_set", "drop_set", "myo_rep_set"], ["normal", "slow", "paused"],
     ),
     (
-        "Cable Lateral Raise", "Cable Machine", "other", "isolation", True,
+        "Cable Lateral Raise", "Cable Machine", "other", "isolation",
         [("Lateral Delts", 1.0)],
         ["straight_set", "myo_rep_set"], ["normal", "slow"],
     ),
     (
-        "Cable Triceps Overhead Extension", "Cable Machine", "other", "isolation", True,
+        "Cable Triceps Overhead Extension", "Cable Machine", "other", "isolation",
         [("Triceps Long Head", 1.0), ("Triceps Lateral Head", 0.4),
          ("Triceps Medial Head", 0.4)],
         ["straight_set", "drop_set", "myo_rep_set"], ["normal", "slow"],
+    ),
+    (
+        "Band External Rotation", "Band", "other", "warmup",
+        [("Rotator Cuff", 1.0)],
+        ["straight_set"], ["normal", "slow"],
     ),
 ]
 
@@ -142,7 +153,7 @@ def seed(db: Session) -> None:
     types_by_name = {t.name: t for t in db.query(ExerciseTypeModel).all()}
 
     for (
-        name, equipment_name, category_name, type_name, warmup_suitable,
+        name, equipment_name, category_name, type_name,
         muscle_contributions, set_type_names, tempo_names,
     ) in EXERCISES:
         exercise = ExerciseModel(
@@ -150,7 +161,6 @@ def seed(db: Session) -> None:
             equipment_id=equipment_by_name[equipment_name].id,
             movement_category_id=categories_by_name[category_name].id,
             exercise_type_id=types_by_name[type_name].id,
-            is_warmup_suitable=warmup_suitable,
         )
         db.add(exercise)
         db.flush()
