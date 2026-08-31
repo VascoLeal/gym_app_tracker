@@ -30,6 +30,7 @@ from app.infrastructure.exercise_models import (
     SetTypeModel,
     TempoModel,
 )
+from app.infrastructure.mesocycle_models import DeloadStrategyModel
 
 MUSCLES = [
     ("Upper Chest", "chest"), ("Mid Chest", "chest"), ("Lower Chest", "chest"),
@@ -70,6 +71,8 @@ MOVEMENT_CATEGORIES = [
 ]
 
 EXERCISE_TYPES = ["compound", "isolation", "warmup"]
+
+DELOAD_STRATEGIES = ["rest", "reduced_load"]
 
 # (name, equipment, movement_category, exercise_type,
 #  [(muscle, contribution), ...], [set_type, ...], [tempo, ...])
@@ -139,6 +142,9 @@ def seed(db: Session) -> None:
 
     if db.query(ExerciseTypeModel).count() == 0:
         db.add_all(ExerciseTypeModel(name=n) for n in EXERCISE_TYPES)
+
+    if db.query(DeloadStrategyModel).count() == 0:
+        db.add_all(DeloadStrategyModel(name=n) for n in DELOAD_STRATEGIES)
 
     db.commit()
 

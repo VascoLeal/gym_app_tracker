@@ -9,7 +9,7 @@ from app.config import get_settings
 from app.infrastructure.database import Base
 from app.infrastructure import models  # noqa: F401  (registers tables on Base)
 from app.infrastructure import exercise_models  # noqa: F401  (same)
-from app.infrastructure import program_models  # noqa: F401  (same)
+from app.infrastructure import mesocycle_models  # noqa: F401  (same)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

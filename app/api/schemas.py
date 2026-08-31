@@ -44,25 +44,7 @@ class ExerciseResponse(BaseModel):
     supported_tempos: list[str]
 
 
-# --- Program / Mesocycle / Prescription ---
-
-
-class ProgramCreateRequest(BaseModel):
-    athlete_id: int
-    name: str
-    description: str = ""
-
-
-class ProgramResponse(BaseModel):
-    id: int
-    athlete_id: int
-    name: str
-    description: str
-
-
-class WeekCreateRequest(BaseModel):
-    week_number: int
-    is_deload: bool = False
+# --- Mesocycle lifecycle ---
 
 
 class WorkoutTemplateCreateRequest(BaseModel):
@@ -72,9 +54,19 @@ class WorkoutTemplateCreateRequest(BaseModel):
 
 
 class MesocycleCreateRequest(BaseModel):
+    athlete_id: int
     name: str
-    weeks: list[WeekCreateRequest] = Field(min_length=1)
+    number_of_weeks: int = Field(ge=4, le=12)
+    deload_strategy: str
     workout_templates: list[WorkoutTemplateCreateRequest] = Field(min_length=1)
+
+
+class MesocycleCopyRequest(BaseModel):
+    new_name: str
+
+
+class MesocycleStopRequest(BaseModel):
+    keep_as_history: bool
 
 
 class WeekResponse(BaseModel):
@@ -99,8 +91,14 @@ class WorkoutTemplateResponse(BaseModel):
 
 class MesocycleResponse(BaseModel):
     id: int
-    program_id: int
+    athlete_id: int
     name: str
+    number_of_weeks: int
+    deload_strategy: str
+    status: str
+    sessions_completed: int
+    current_week_number: int
+    next_workout_template_id: int | None
     weeks: list[WeekResponse]
     workout_templates: list[WorkoutTemplateResponse]
 
