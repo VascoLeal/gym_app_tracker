@@ -133,3 +133,58 @@ class ExercisePrescriptionResponse(BaseModel):
     week_id: int
     notes: str
     sets: list[SetPrescriptionResponse]
+
+
+# --- Workout Session ---
+
+
+class LogSetRequest(BaseModel):
+    set_type: str
+    tempo: str
+    set_prescription_id: int | None = None
+    actual_weight: float | None = None
+    actual_reps: int | None = None
+    partial_reps: int | None = None
+    actual_rir: float | None = None
+
+
+class SetPerformanceResponse(BaseModel):
+    id: int
+    set_prescription_id: int | None
+    set_number: int
+    set_type: str
+    tempo: str
+    actual_weight: float | None
+    actual_reps: int | None
+    partial_reps: int | None
+    actual_rir: float | None
+
+
+class PrescribedSetResponse(BaseModel):
+    set_number: int
+    set_type: str
+    tempo: str
+    rep_range_min: int
+    rep_range_max: int
+    target_rir: float | None
+
+
+class PerformedExerciseResponse(BaseModel):
+    id: int
+    template_exercise_id: int | None
+    exercise_id: int
+    exercise_name: str
+    order_performed: int
+    prescribed_sets: list[PrescribedSetResponse]
+    performed_sets: list[SetPerformanceResponse]
+
+
+class WorkoutSessionResponse(BaseModel):
+    id: int
+    mesocycle_id: int
+    week_id: int
+    workout_template_id: int
+    status: str
+    started_at: datetime
+    completed_at: datetime | None
+    performed_exercises: list[PerformedExerciseResponse]
