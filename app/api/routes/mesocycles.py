@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.schemas import (
+    AddTemplateExerciseRequest,
+    EditTemplateExerciseRequest,
     ExercisePrescriptionResponse,
     MesocycleCopyRequest,
     MesocycleCreateRequest,
@@ -16,16 +18,23 @@ from app.api.schemas import (
 from app.application.mesocycle_service import (
     AthleteAlreadyHasActiveMesocycle,
     InvalidMesocycleLength,
+    MesocycleAlreadyStarted,
     MesocycleNotFound,
+    MesocycleStillActive,
     SetPrescriptionInput,
+    TemplateExerciseNotFound,
     WorkoutTemplateInput,
     add_prescription,
+    add_template_exercise,
     copy_mesocycle,
     create_mesocycle,
     current_position,
+    delete_mesocycle,
+    edit_template_exercise,
     get_mesocycle,
     get_week_prescriptions,
     list_athlete_mesocycles,
+    remove_template_exercise,
     stop_mesocycle,
 )
 from app.infrastructure.database import get_db
@@ -156,6 +165,88 @@ def copy_mesocycle_route(
                    "Stop it before copying into a new one.",
         ) from exc
     return _mesocycle_to_response(new_mesocycle)
+
+
+@router.patch("/template-exercises/{template_exercise_id}", response_model=TemplateExerciseResponse)
+def edit_template_exercise_route(
+    template_exercise_id: int, body: EditTemplateExerciseRequest, db: Session = Depends(get_db)
+) -> TemplateExerciseResponse:
+    try:
+        te = edit_template_exercise(db, template_exercise_id, body.exercise_id)
+    except TemplateExerciseNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Exercise slot not found."
+        ) from exc
+    except MesocycleAlreadyStarted as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Can't edit exercises after the mesocycle has started — "
+                   "the selection is meant to stay fixed once training begins.",
+        ) from exc
+    return TemplateExerciseResponse(
+        id=te.id, exercise_id=te.exercise_id, exercise_name=te.exercise.name,
+        order_in_workout=te.order_in_workout,
+    )
+
+
+@router.post(
+    "/workout-templates/{workout_template_id}/exercises",
+    response_model=TemplateExerciseResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_template_exercise_route(
+    workout_template_id: int, body: AddTemplateExerciseRequest, db: Session = Depends(get_db)
+) -> TemplateExerciseResponse:
+    try:
+        te = add_template_exercise(db, workout_template_id, body.exercise_id)
+    except MesocycleNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Workout template not found."
+        ) from exc
+    except MesocycleAlreadyStarted as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Can't edit exercises after the mesocycle has started.",
+        ) from exc
+    return TemplateExerciseResponse(
+        id=te.id, exercise_id=te.exercise_id, exercise_name=te.exercise.name,
+        order_in_workout=te.order_in_workout,
+    )
+
+
+@router.delete(
+    "/template-exercises/{template_exercise_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_template_exercise_route(
+    template_exercise_id: int, db: Session = Depends(get_db)
+) -> None:
+    try:
+        remove_template_exercise(db, template_exercise_id)
+    except TemplateExerciseNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Exercise slot not found."
+        ) from exc
+    except MesocycleAlreadyStarted as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Can't edit exercises after the mesocycle has started.",
+        ) from exc
+
+
+@router.delete("/mesocycles/{mesocycle_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_mesocycle_route(mesocycle_id: int, db: Session = Depends(get_db)) -> None:
+    try:
+        delete_mesocycle(db, mesocycle_id)
+    except MesocycleNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Mesocycle not found."
+        ) from exc
+    except MesocycleStillActive as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Stop the mesocycle before deleting it.",
+        ) from exc
 
 
 @router.post(

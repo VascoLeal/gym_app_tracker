@@ -69,6 +69,14 @@ class MesocycleStopRequest(BaseModel):
     keep_as_history: bool
 
 
+class EditTemplateExerciseRequest(BaseModel):
+    exercise_id: int
+
+
+class AddTemplateExerciseRequest(BaseModel):
+    exercise_id: int
+
+
 class WeekResponse(BaseModel):
     id: int
     week_number: int

@@ -34,6 +34,18 @@ class MesocycleNotFound(Exception):
     pass
 
 
+class MesocycleAlreadyStarted(Exception):
+    pass
+
+
+class MesocycleStillActive(Exception):
+    pass
+
+
+class TemplateExerciseNotFound(Exception):
+    pass
+
+
 @dataclass
 class WorkoutTemplateInput:
     name: str
@@ -170,6 +182,100 @@ def copy_mesocycle(db: Session, source_mesocycle_id: int, new_name: str) -> Meso
     )
 
 
+def _assert_not_started(mesocycle: MesocycleModel) -> None:
+    """Exercise selection is supposed to stay fixed for the whole
+    mesocycle (per the author's own design principle) — so editing it is
+    only allowed before any session has been logged against it, not
+    mid-block."""
+    if mesocycle.sessions_completed > 0:
+        raise MesocycleAlreadyStarted(mesocycle.id)
+
+
+def edit_template_exercise(db: Session, template_exercise_id: int, exercise_id: int) -> TemplateExerciseModel:
+    template_exercise = (
+        db.query(TemplateExerciseModel)
+        .join(WorkoutTemplateModel)
+        .join(MesocycleModel)
+        .filter(TemplateExerciseModel.id == template_exercise_id)
+        .first()
+    )
+    if template_exercise is None:
+        raise TemplateExerciseNotFound(template_exercise_id)
+
+    _assert_not_started(template_exercise.workout_template.mesocycle)
+
+    template_exercise.exercise_id = exercise_id
+    db.commit()
+    db.refresh(template_exercise)
+    return template_exercise
+
+
+def add_template_exercise(db: Session, workout_template_id: int, exercise_id: int) -> TemplateExerciseModel:
+    template = (
+        db.query(WorkoutTemplateModel)
+        .filter(WorkoutTemplateModel.id == workout_template_id)
+        .first()
+    )
+    if template is None:
+        raise MesocycleNotFound(workout_template_id)
+
+    _assert_not_started(template.mesocycle)
+
+    next_position = len(template.exercises) + 1
+    template_exercise = TemplateExerciseModel(
+        workout_template_id=workout_template_id,
+        exercise_id=exercise_id,
+        order_in_workout=next_position,
+    )
+    db.add(template_exercise)
+    db.commit()
+    db.refresh(template_exercise)
+    return template_exercise
+
+
+def remove_template_exercise(db: Session, template_exercise_id: int) -> None:
+    template_exercise = (
+        db.query(TemplateExerciseModel)
+        .filter(TemplateExerciseModel.id == template_exercise_id)
+        .first()
+    )
+    if template_exercise is None:
+        raise TemplateExerciseNotFound(template_exercise_id)
+
+    template = template_exercise.workout_template
+    _assert_not_started(template.mesocycle)
+
+    db.delete(template_exercise)
+    db.flush()
+
+    # Renumber remaining slots so order_in_workout stays contiguous.
+    remaining = (
+        db.query(TemplateExerciseModel)
+        .filter(TemplateExerciseModel.workout_template_id == template.id)
+        .order_by(TemplateExerciseModel.order_in_workout)
+        .all()
+    )
+    for position, te in enumerate(remaining, start=1):
+        te.order_in_workout = position
+
+    db.commit()
+
+
+def delete_mesocycle(db: Session, mesocycle_id: int) -> None:
+    """Removes a mesocycle from history. Only for non-active ones —
+    an active mesocycle must be stopped first (via stop_mesocycle), since
+    deleting an in-progress block outright is more likely to be a mistake
+    than an intentional action."""
+    mesocycle = db.query(MesocycleModel).filter(MesocycleModel.id == mesocycle_id).first()
+    if mesocycle is None:
+        raise MesocycleNotFound(mesocycle_id)
+    if mesocycle.status == MesocycleStatus.ACTIVE.value:
+        raise MesocycleStillActive(mesocycle_id)
+
+    db.delete(mesocycle)
+    db.commit()
+
+
 def get_mesocycle(db: Session, mesocycle_id: int) -> MesocycleModel | None:
     return (
         db.query(MesocycleModel)
@@ -194,6 +300,20 @@ def list_athlete_mesocycles(db: Session, athlete_id: int) -> list[MesocycleModel
     )
 
 
+def total_required_sessions(mesocycle: MesocycleModel) -> int:
+    """How many sessions this mesocycle needs before it's done.
+
+    A "rest" deload week needs ZERO sessions — there's no calendar to wait
+    out in this model, so the mesocycle simply finishes once the last
+    NORMAL week's sessions are complete. "reduced_load" still trains that
+    week (just lighter), so it counts like any other week."""
+    training_days_per_week = len(mesocycle.workout_templates)
+    effective_weeks = mesocycle.number_of_weeks
+    if mesocycle.deload_strategy.name == "rest":
+        effective_weeks -= 1
+    return effective_weeks * training_days_per_week
+
+
 def current_position(mesocycle: MesocycleModel) -> tuple[int, WorkoutTemplateModel | None]:
     """Derives (current_week_number, next_workout_template) from
     sessions_completed — see domain/mesocycle.py module docstring for why
@@ -203,8 +323,7 @@ def current_position(mesocycle: MesocycleModel) -> tuple[int, WorkoutTemplateMod
     if training_days_per_week == 0:
         return 1, None
 
-    total_sessions = mesocycle.number_of_weeks * training_days_per_week
-    if mesocycle.sessions_completed >= total_sessions:
+    if mesocycle.sessions_completed >= total_required_sessions(mesocycle):
         return mesocycle.number_of_weeks, None
 
     current_week_number = mesocycle.sessions_completed // training_days_per_week + 1

@@ -2,7 +2,11 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session, selectinload
 
-from app.application.mesocycle_service import current_position, get_mesocycle
+from app.application.mesocycle_service import (
+    current_position,
+    get_mesocycle,
+    total_required_sessions,
+)
 from app.infrastructure.exercise_models import SetTypeModel, TempoModel
 from app.infrastructure.mesocycle_models import (
     ExercisePrescriptionModel,
@@ -139,6 +143,15 @@ def complete_session(db: Session, session_id: int) -> WorkoutSessionModel:
         .first()
     )
     mesocycle.sessions_completed += 1
+
+    # Auto-complete: the mesocycle finishes the instant its required
+    # sessions are done — no explicit "finish mesocycle" confirmation,
+    # consistent with everything else here being session-driven rather
+    # than requiring a manual step. A "rest" deload week needs zero
+    # sessions, so this can trigger right after the last normal week.
+    full_mesocycle = get_mesocycle(db, mesocycle.id)
+    if mesocycle.sessions_completed >= total_required_sessions(full_mesocycle):
+        mesocycle.status = "completed"
 
     db.commit()
     db.refresh(workout_session)
