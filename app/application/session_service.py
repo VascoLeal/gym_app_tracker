@@ -7,7 +7,6 @@ from app.application.mesocycle_service import (
     get_mesocycle,
     total_required_sessions,
 )
-from app.infrastructure.exercise_models import SetTypeModel, TempoModel
 from app.infrastructure.mesocycle_models import (
     ExercisePrescriptionModel,
     MesocycleModel,
@@ -89,17 +88,12 @@ def start_session(db: Session, mesocycle_id: int) -> WorkoutSessionModel:
 def log_set(
     db: Session,
     performed_exercise_id: int,
-    set_type_name: str,
-    tempo_name: str,
     set_prescription_id: int | None = None,
     actual_weight: float | None = None,
-    actual_reps: int | None = None,
-    partial_reps: int | None = None,
-    actual_rir: float | None = None,
+    actual_reps: float | None = None,
+    actual_rpe: float | None = None,
+    notes: str | None = None,
 ) -> SetPerformanceModel:
-    set_type = db.query(SetTypeModel).filter(SetTypeModel.name == set_type_name).first()
-    tempo = db.query(TempoModel).filter(TempoModel.name == tempo_name).first()
-
     existing_count = (
         db.query(SetPerformanceModel)
         .filter(SetPerformanceModel.performed_exercise_id == performed_exercise_id)
@@ -110,12 +104,10 @@ def log_set(
         performed_exercise_id=performed_exercise_id,
         set_prescription_id=set_prescription_id,
         set_number=existing_count + 1,
-        set_type_id=set_type.id,
-        tempo_id=tempo.id,
         actual_weight=actual_weight,
         actual_reps=actual_reps,
-        partial_reps=partial_reps,
-        actual_rir=actual_rir,
+        actual_rpe=actual_rpe,
+        notes=notes,
     )
     db.add(set_performance)
     db.commit()
@@ -181,14 +173,11 @@ def get_session(db: Session, session_id: int) -> WorkoutSessionModel | None:
     return (
         db.query(WorkoutSessionModel)
         .options(
+            selectinload(WorkoutSessionModel.week),
             selectinload(WorkoutSessionModel.performed_exercises)
             .selectinload(PerformedExerciseModel.exercise),
             selectinload(WorkoutSessionModel.performed_exercises)
-            .selectinload(PerformedExerciseModel.sets)
-            .selectinload(SetPerformanceModel.set_type),
-            selectinload(WorkoutSessionModel.performed_exercises)
-            .selectinload(PerformedExerciseModel.sets)
-            .selectinload(SetPerformanceModel.tempo),
+            .selectinload(PerformedExerciseModel.sets),
         )
         .filter(WorkoutSessionModel.id == session_id)
         .first()
@@ -204,6 +193,7 @@ def get_prescription_for(
     return (
         db.query(ExercisePrescriptionModel)
         .options(
+            selectinload(ExercisePrescriptionModel.week),
             selectinload(ExercisePrescriptionModel.sets)
             .selectinload(SetPrescriptionModel.set_type),
             selectinload(ExercisePrescriptionModel.sets)

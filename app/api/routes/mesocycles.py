@@ -56,7 +56,10 @@ def _mesocycle_to_response(m: MesocycleModel) -> MesocycleResponse:
         current_week_number=week_number,
         next_workout_template_id=next_template.id if next_template else None,
         weeks=[
-            WeekResponse(id=w.id, week_number=w.week_number, is_deload=w.is_deload)
+            WeekResponse(
+                id=w.id, week_number=w.week_number, is_deload=w.is_deload,
+                target_rpe=w.target_rpe,
+            )
             for w in m.weeks
         ],
         workout_templates=[
@@ -266,7 +269,7 @@ def add_prescription_route(
         notes=body.notes,
         sets=[
             SetPrescriptionInput(
-                s.set_type, s.tempo, s.rep_range_min, s.rep_range_max, s.target_rir
+                s.set_type, s.tempo, s.rep_range_min, s.rep_range_max
             )
             for s in body.sets
         ],
@@ -280,7 +283,7 @@ def add_prescription_route(
             SetPrescriptionResponse(
                 id=s.id, set_number=s.set_number, set_type=s.set_type,
                 tempo=s.tempo, rep_range_min=s.rep_range_min,
-                rep_range_max=s.rep_range_max, target_rir=s.target_rir,
+                rep_range_max=s.rep_range_max, target_rpe=s.target_rpe,
             )
             for s in prescription.sets
         ],
@@ -303,7 +306,7 @@ def list_week_prescriptions_route(
                 SetPrescriptionResponse(
                     id=s.id, set_number=s.set_number, set_type=s.set_type,
                     tempo=s.tempo, rep_range_min=s.rep_range_min,
-                    rep_range_max=s.rep_range_max, target_rir=s.target_rir,
+                    rep_range_max=s.rep_range_max, target_rpe=s.target_rpe,
                 )
                 for s in p.sets
             ],

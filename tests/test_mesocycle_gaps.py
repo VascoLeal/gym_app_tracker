@@ -72,7 +72,7 @@ def _run_one_session(client, mesocycle_id):
     performed_exercise_id = session["performed_exercises"][0]["id"]
     client.post(
         f"/performed-exercises/{performed_exercise_id}/sets",
-        json={"set_type": "straight_set", "tempo": "normal", "actual_weight": 60.0, "actual_reps": 9},
+        json={"actual_weight": 60.0, "actual_reps": 9, "actual_rpe": 8.0},
     )
     return client.post(f"/workout-sessions/{session['id']}/complete").json()
 

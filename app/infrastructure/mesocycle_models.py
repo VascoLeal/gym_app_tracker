@@ -57,6 +57,7 @@ class WeekModel(Base):
     mesocycle_id: Mapped[int] = mapped_column(ForeignKey("mesocycles.id"))
     week_number: Mapped[int] = mapped_column(Integer)
     is_deload: Mapped[bool] = mapped_column(default=False)
+    target_rpe: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     mesocycle: Mapped[MesocycleModel] = relationship(back_populates="weeks")
 
@@ -126,7 +127,6 @@ class SetPrescriptionModel(Base):
     tempo_id: Mapped[int] = mapped_column(ForeignKey("tempos.id"))
     rep_range_min: Mapped[int] = mapped_column(Integer)
     rep_range_max: Mapped[int] = mapped_column(Integer)
-    target_rir: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     exercise_prescription: Mapped[ExercisePrescriptionModel] = relationship(
         back_populates="sets"

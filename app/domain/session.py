@@ -26,15 +26,18 @@ class WorkoutSessionStatus(str, Enum):
 
 @dataclass
 class SetPerformance:
+    """One actual set. Deliberately just three inputs — weight, reps
+    (decimal, so a partial rep is e.g. 8.5 rather than a separate field),
+    and RPE. set_type/tempo aren't re-logged here: what was prescribed
+    already says what was planned, and re-confirming it per set added
+    input friction with little signal (author's call, 2026-08-30)."""
+
     id: int | None
     set_prescription_id: int | None  # None = an added set with no plan behind it
     set_number: int
-    set_type: str
-    tempo: str
     actual_weight: float | None
-    actual_reps: int | None
-    partial_reps: int | None
-    actual_rir: float | None
+    actual_reps: float | None
+    actual_rpe: float | None
 
 
 @dataclass

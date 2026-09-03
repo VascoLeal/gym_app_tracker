@@ -72,7 +72,7 @@ MOVEMENT_CATEGORIES = [
 
 EXERCISE_TYPES = ["compound", "isolation", "warmup"]
 
-DELOAD_STRATEGIES = ["rest", "reduced_load"]
+DELOAD_STRATEGIES = ["rest", "reduced_load", "none"]
 
 # (name, equipment, movement_category, exercise_type,
 #  [(muscle, contribution), ...], [set_type, ...], [tempo, ...])
@@ -124,27 +124,26 @@ EXERCISES = [
 ]
 
 
+def _ensure_named_rows(db: Session, model, names: list[str]) -> None:
+    """Inserts only the names missing from this table, leaving existing
+    rows (and their ids) untouched. Deliberately NOT 'if count == 0, add
+    all' — that pattern silently skips new values on a table that already
+    has SOME rows, which is exactly the bug that missed 'warmup' being
+    added to exercise_types earlier in this project."""
+    existing = {row.name for row in db.query(model).all()}
+    db.add_all(model(name=n) for n in names if n not in existing)
+
+
 def seed(db: Session) -> None:
     if db.query(MuscleModel).count() == 0:
         db.add_all(MuscleModel(name=n, muscle_group=g) for n, g in MUSCLES)
 
-    if db.query(EquipmentModel).count() == 0:
-        db.add_all(EquipmentModel(name=n) for n in EQUIPMENT)
-
-    if db.query(SetTypeModel).count() == 0:
-        db.add_all(SetTypeModel(name=n) for n in SET_TYPES)
-
-    if db.query(TempoModel).count() == 0:
-        db.add_all(TempoModel(name=n) for n in TEMPOS)
-
-    if db.query(MovementCategoryModel).count() == 0:
-        db.add_all(MovementCategoryModel(name=n) for n in MOVEMENT_CATEGORIES)
-
-    if db.query(ExerciseTypeModel).count() == 0:
-        db.add_all(ExerciseTypeModel(name=n) for n in EXERCISE_TYPES)
-
-    if db.query(DeloadStrategyModel).count() == 0:
-        db.add_all(DeloadStrategyModel(name=n) for n in DELOAD_STRATEGIES)
+    _ensure_named_rows(db, EquipmentModel, EQUIPMENT)
+    _ensure_named_rows(db, SetTypeModel, SET_TYPES)
+    _ensure_named_rows(db, TempoModel, TEMPOS)
+    _ensure_named_rows(db, MovementCategoryModel, MOVEMENT_CATEGORIES)
+    _ensure_named_rows(db, ExerciseTypeModel, EXERCISE_TYPES)
+    _ensure_named_rows(db, DeloadStrategyModel, DELOAD_STRATEGIES)
 
     db.commit()
 

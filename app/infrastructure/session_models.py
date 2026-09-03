@@ -6,11 +6,11 @@ hierarchy in mesocycle_models.py.
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infrastructure.database import Base
-from app.infrastructure.exercise_models import ExerciseModel, SetTypeModel, TempoModel
+from app.infrastructure.exercise_models import ExerciseModel
 from app.infrastructure.mesocycle_models import (
     MesocycleModel,
     SetPrescriptionModel,
@@ -82,16 +82,17 @@ class SetPerformanceModel(Base):
         ForeignKey("set_prescriptions.id"), nullable=True
     )
     set_number: Mapped[int] = mapped_column(Integer)
-    set_type_id: Mapped[int] = mapped_column(ForeignKey("set_types.id"))
-    tempo_id: Mapped[int] = mapped_column(ForeignKey("tempos.id"))
     actual_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
-    actual_reps: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    partial_reps: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    actual_rir: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Float, not Integer: a partial rep is expressed as e.g. 8.5 rather
+    # than a separate partial_reps field (author's call, 2026-08-30).
+    actual_reps: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual_rpe: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Optional free-text escape hatch for anything worth remembering that
+    # doesn't fit weight/reps/RPE — e.g. "did a drop set instead", "used
+    # the 25s, 30s were taken". Opt-in, not a required structured field.
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     performed_exercise: Mapped[PerformedExerciseModel] = relationship(
         back_populates="sets"
     )
     set_prescription: Mapped[SetPrescriptionModel | None] = relationship()
-    set_type: Mapped[SetTypeModel] = relationship()
-    tempo: Mapped[TempoModel] = relationship()

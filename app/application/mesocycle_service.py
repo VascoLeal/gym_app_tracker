@@ -53,6 +53,36 @@ class WorkoutTemplateInput:
     exercise_ids: list[int]  # in workout order
 
 
+def compute_week_target_rpes(
+    number_of_weeks: int, deload_strategy_name: str
+) -> dict[int, float | None]:
+    """Maps week_number -> target RPE. Non-deload weeks get a linear ramp
+    from 7 (week 1) to 10 (the last non-deload week), rounded to the
+    nearest whole number. A "rest" deload week gets no target at all
+    (nothing is trained). A "reduced_load" deload week also gets no
+    target — its whole point is training lighter, not chasing intensity,
+    so a target RPE would work against that (author's design call was
+    open on this specific case; this is the recommended default).
+    "none" means there's no deload week, so every week is part of the ramp.
+    """
+    has_deload_week = deload_strategy_name in ("rest", "reduced_load")
+    non_deload_weeks = number_of_weeks - 1 if has_deload_week else number_of_weeks
+
+    targets: dict[int, float | None] = {}
+    for week_number in range(1, non_deload_weeks + 1):
+        week_index = week_number - 1
+        if non_deload_weeks == 1:
+            rpe = 10.0
+        else:
+            rpe = 7 + 3 * week_index / (non_deload_weeks - 1)
+        targets[week_number] = float(round(rpe))
+
+    if has_deload_week:
+        targets[number_of_weeks] = None
+
+    return targets
+
+
 def _assert_no_active_mesocycle(db: Session, athlete_id: int) -> None:
     existing = (
         db.query(MesocycleModel)
@@ -102,11 +132,16 @@ def create_mesocycle(
     db.add(mesocycle)
     db.flush()
 
+    target_rpes = compute_week_target_rpes(number_of_weeks, deload_strategy_name)
     for week_number in range(1, number_of_weeks + 1):
         db.add(WeekModel(
             mesocycle_id=mesocycle.id,
             week_number=week_number,
-            is_deload=(week_number == number_of_weeks),
+            is_deload=(
+                deload_strategy_name in ("rest", "reduced_load")
+                and week_number == number_of_weeks
+            ),
+            target_rpe=target_rpes[week_number],
         ))
 
     _create_workout_templates(db, mesocycle.id, workout_templates)
@@ -338,7 +373,6 @@ class SetPrescriptionInput:
     tempo: str
     rep_range_min: int
     rep_range_max: int
-    target_rir: float | None = None
 
 
 def add_prescription(
@@ -365,7 +399,6 @@ def add_prescription(
             tempo_id=tempos_by_name[s.tempo].id,
             rep_range_min=s.rep_range_min,
             rep_range_max=s.rep_range_max,
-            target_rir=s.target_rir,
         ))
 
     db.commit()
@@ -374,6 +407,7 @@ def add_prescription(
 
 
 def _prescription_to_domain(row: ExercisePrescriptionModel) -> ExercisePrescription:
+    target_rpe = row.week.target_rpe
     return ExercisePrescription(
         id=row.id,
         template_exercise_id=row.template_exercise_id,
@@ -387,7 +421,7 @@ def _prescription_to_domain(row: ExercisePrescriptionModel) -> ExercisePrescript
                 tempo=s.tempo.name,
                 rep_range_min=s.rep_range_min,
                 rep_range_max=s.rep_range_max,
-                target_rir=s.target_rir,
+                target_rpe=target_rpe,
             )
             for s in row.sets
         ],
@@ -398,6 +432,7 @@ def get_week_prescriptions(db: Session, week_id: int) -> list[ExercisePrescripti
     rows = (
         db.query(ExercisePrescriptionModel)
         .options(
+            selectinload(ExercisePrescriptionModel.week),
             selectinload(ExercisePrescriptionModel.sets)
             .selectinload(SetPrescriptionModel.set_type),
             selectinload(ExercisePrescriptionModel.sets)

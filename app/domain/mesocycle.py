@@ -40,6 +40,7 @@ class Week:
     mesocycle_id: int
     week_number: int
     is_deload: bool
+    target_rpe: float | None  # computed at creation, not entered — see mesocycle_service
 
 
 @dataclass
@@ -65,7 +66,10 @@ class TemplateExercise:
 @dataclass
 class SetPrescription:
     """One planned set. set_type and tempo live HERE, per-set, not on the
-    exercise prescription as a whole."""
+    exercise prescription as a whole. target_rpe is NOT stored here — it's
+    computed at the Week level (every exercise that week shares the same
+    target) and surfaced onto each set only when assembling an API
+    response, for convenience."""
 
     id: int | None
     set_number: int
@@ -73,7 +77,7 @@ class SetPrescription:
     tempo: str
     rep_range_min: int
     rep_range_max: int
-    target_rir: float | None
+    target_rpe: float | None = None
 
 
 @dataclass

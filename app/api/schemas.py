@@ -81,6 +81,7 @@ class WeekResponse(BaseModel):
     id: int
     week_number: int
     is_deload: bool
+    target_rpe: float | None
 
 
 class TemplateExerciseResponse(BaseModel):
@@ -116,7 +117,6 @@ class SetPrescriptionCreateRequest(BaseModel):
     tempo: str
     rep_range_min: int
     rep_range_max: int
-    target_rir: float | None = None
 
 
 class PrescriptionCreateRequest(BaseModel):
@@ -132,7 +132,7 @@ class SetPrescriptionResponse(BaseModel):
     tempo: str
     rep_range_min: int
     rep_range_max: int
-    target_rir: float | None
+    target_rpe: float | None
 
 
 class ExercisePrescriptionResponse(BaseModel):
@@ -147,25 +147,21 @@ class ExercisePrescriptionResponse(BaseModel):
 
 
 class LogSetRequest(BaseModel):
-    set_type: str
-    tempo: str
     set_prescription_id: int | None = None
     actual_weight: float | None = None
-    actual_reps: int | None = None
-    partial_reps: int | None = None
-    actual_rir: float | None = None
+    actual_reps: float | None = None
+    actual_rpe: float | None = None
+    notes: str | None = None
 
 
 class SetPerformanceResponse(BaseModel):
     id: int
     set_prescription_id: int | None
     set_number: int
-    set_type: str
-    tempo: str
     actual_weight: float | None
-    actual_reps: int | None
-    partial_reps: int | None
-    actual_rir: float | None
+    actual_reps: float | None
+    actual_rpe: float | None
+    notes: str | None
 
 
 class PrescribedSetResponse(BaseModel):
@@ -174,7 +170,7 @@ class PrescribedSetResponse(BaseModel):
     tempo: str
     rep_range_min: int
     rep_range_max: int
-    target_rir: float | None
+    target_rpe: float | None
 
 
 class PerformedExerciseResponse(BaseModel):

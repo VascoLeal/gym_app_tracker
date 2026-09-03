@@ -88,9 +88,9 @@ def _add_prescription(client, mesocycle, template_name, week_number):
             "notes": "",
             "sets": [
                 {"set_type": "straight_set", "tempo": "normal",
-                 "rep_range_min": 8, "rep_range_max": 10, "target_rir": 2.0},
+                 "rep_range_min": 8, "rep_range_max": 10},
                 {"set_type": "straight_set", "tempo": "normal",
-                 "rep_range_min": 8, "rep_range_max": 10, "target_rir": 2.0},
+                 "rep_range_min": 8, "rep_range_max": 10},
             ],
         },
     ).json()
@@ -132,10 +132,7 @@ def test_log_sets_and_complete_advances_sessions_completed(client, mesocycle):
     for p in prescribed:
         client.post(
             f"/performed-exercises/{performed_exercise_id}/sets",
-            json={
-                "set_type": p["set_type"], "tempo": p["tempo"],
-                "actual_weight": 60.0, "actual_reps": 9, "actual_rir": 1.5,
-            },
+            json={"actual_weight": 60.0, "actual_reps": 9, "actual_rpe": 8.5},
         )
 
     completed = client.post(f"/workout-sessions/{session['id']}/complete").json()

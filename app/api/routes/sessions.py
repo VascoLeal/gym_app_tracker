@@ -34,11 +34,12 @@ def _session_to_response(db: Session, ws: WorkoutSessionModel) -> WorkoutSession
         if pe.template_exercise_id is not None:
             prescription = get_prescription_for(db, pe.template_exercise_id, ws.week_id)
             if prescription is not None:
+                target_rpe = prescription.week.target_rpe
                 prescribed_sets = [
                     PrescribedSetResponse(
                         set_number=s.set_number, set_type=s.set_type.name,
                         tempo=s.tempo.name, rep_range_min=s.rep_range_min,
-                        rep_range_max=s.rep_range_max, target_rir=s.target_rir,
+                        rep_range_max=s.rep_range_max, target_rpe=target_rpe,
                     )
                     for s in prescription.sets
                 ]
@@ -53,10 +54,9 @@ def _session_to_response(db: Session, ws: WorkoutSessionModel) -> WorkoutSession
             performed_sets=[
                 SetPerformanceResponse(
                     id=s.id, set_prescription_id=s.set_prescription_id,
-                    set_number=s.set_number, set_type=s.set_type.name,
-                    tempo=s.tempo.name, actual_weight=s.actual_weight,
-                    actual_reps=s.actual_reps, partial_reps=s.partial_reps,
-                    actual_rir=s.actual_rir,
+                    set_number=s.set_number, actual_weight=s.actual_weight,
+                    actual_reps=s.actual_reps, actual_rpe=s.actual_rpe,
+                    notes=s.notes,
                 )
                 for s in pe.sets
             ],
@@ -122,18 +122,16 @@ def log_set_route(
     s = log_set(
         db,
         performed_exercise_id=performed_exercise_id,
-        set_type_name=body.set_type,
-        tempo_name=body.tempo,
         set_prescription_id=body.set_prescription_id,
         actual_weight=body.actual_weight,
         actual_reps=body.actual_reps,
-        partial_reps=body.partial_reps,
-        actual_rir=body.actual_rir,
+        actual_rpe=body.actual_rpe,
+        notes=body.notes,
     )
     return SetPerformanceResponse(
         id=s.id, set_prescription_id=s.set_prescription_id, set_number=s.set_number,
-        set_type=s.set_type.name, tempo=s.tempo.name, actual_weight=s.actual_weight,
-        actual_reps=s.actual_reps, partial_reps=s.partial_reps, actual_rir=s.actual_rir,
+        actual_weight=s.actual_weight, actual_reps=s.actual_reps, actual_rpe=s.actual_rpe,
+        notes=s.notes,
     )
 
 
