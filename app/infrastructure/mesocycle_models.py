@@ -127,6 +127,7 @@ class SetPrescriptionModel(Base):
     tempo_id: Mapped[int] = mapped_column(ForeignKey("tempos.id"))
     rep_range_min: Mapped[int] = mapped_column(Integer)
     rep_range_max: Mapped[int] = mapped_column(Integer)
+    target_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     exercise_prescription: Mapped[ExercisePrescriptionModel] = relationship(
         back_populates="sets"

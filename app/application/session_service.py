@@ -7,6 +7,9 @@ from app.application.mesocycle_service import (
     get_mesocycle,
     total_required_sessions,
 )
+from app.application.progression_service import (
+    generate_next_week_prescriptions_for_session,
+)
 from app.infrastructure.mesocycle_models import (
     ExercisePrescriptionModel,
     MesocycleModel,
@@ -147,6 +150,13 @@ def complete_session(db: Session, session_id: int) -> WorkoutSessionModel:
 
     db.commit()
     db.refresh(workout_session)
+
+    # Best-effort: auto-generate next week's prescription per exercise,
+    # based on this session's performance. Skipped where there isn't
+    # enough data (swap, no logged sets, already exists, mesocycle ends
+    # here) — see progression_service for the actual rule table.
+    generate_next_week_prescriptions_for_session(db, workout_session)
+
     return workout_session
 
 

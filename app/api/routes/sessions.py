@@ -37,9 +37,10 @@ def _session_to_response(db: Session, ws: WorkoutSessionModel) -> WorkoutSession
                 target_rpe = prescription.week.target_rpe
                 prescribed_sets = [
                     PrescribedSetResponse(
-                        set_number=s.set_number, set_type=s.set_type.name,
+                        id=s.id, set_number=s.set_number, set_type=s.set_type.name,
                         tempo=s.tempo.name, rep_range_min=s.rep_range_min,
                         rep_range_max=s.rep_range_max, target_rpe=target_rpe,
+                        target_weight=s.target_weight,
                     )
                     for s in prescription.sets
                 ]

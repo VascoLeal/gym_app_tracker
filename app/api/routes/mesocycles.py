@@ -269,7 +269,7 @@ def add_prescription_route(
         notes=body.notes,
         sets=[
             SetPrescriptionInput(
-                s.set_type, s.tempo, s.rep_range_min, s.rep_range_max
+                s.set_type, s.tempo, s.rep_range_min, s.rep_range_max, s.target_weight
             )
             for s in body.sets
         ],
@@ -284,6 +284,7 @@ def add_prescription_route(
                 id=s.id, set_number=s.set_number, set_type=s.set_type,
                 tempo=s.tempo, rep_range_min=s.rep_range_min,
                 rep_range_max=s.rep_range_max, target_rpe=s.target_rpe,
+                target_weight=s.target_weight,
             )
             for s in prescription.sets
         ],
@@ -307,6 +308,7 @@ def list_week_prescriptions_route(
                     id=s.id, set_number=s.set_number, set_type=s.set_type,
                     tempo=s.tempo, rep_range_min=s.rep_range_min,
                     rep_range_max=s.rep_range_max, target_rpe=s.target_rpe,
+                    target_weight=s.target_weight,
                 )
                 for s in p.sets
             ],

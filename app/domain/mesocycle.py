@@ -78,6 +78,10 @@ class SetPrescription:
     rep_range_min: int
     rep_range_max: int
     target_rpe: float | None = None
+    # A suggestion, not a mandate — the athlete still enters whatever
+    # weight they actually used. None for week 1 (nothing to base a
+    # recommendation on yet) or wherever progression skipped a slot.
+    target_weight: float | None = None
 
 
 @dataclass

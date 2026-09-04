@@ -117,6 +117,7 @@ class SetPrescriptionCreateRequest(BaseModel):
     tempo: str
     rep_range_min: int
     rep_range_max: int
+    target_weight: float | None = None
 
 
 class PrescriptionCreateRequest(BaseModel):
@@ -133,6 +134,7 @@ class SetPrescriptionResponse(BaseModel):
     rep_range_min: int
     rep_range_max: int
     target_rpe: float | None
+    target_weight: float | None
 
 
 class ExercisePrescriptionResponse(BaseModel):
@@ -165,12 +167,14 @@ class SetPerformanceResponse(BaseModel):
 
 
 class PrescribedSetResponse(BaseModel):
+    id: int
     set_number: int
     set_type: str
     tempo: str
     rep_range_min: int
     rep_range_max: int
     target_rpe: float | None
+    target_weight: float | None
 
 
 class PerformedExerciseResponse(BaseModel):

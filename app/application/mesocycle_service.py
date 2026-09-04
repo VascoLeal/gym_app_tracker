@@ -373,6 +373,7 @@ class SetPrescriptionInput:
     tempo: str
     rep_range_min: int
     rep_range_max: int
+    target_weight: float | None = None
 
 
 def add_prescription(
@@ -399,6 +400,7 @@ def add_prescription(
             tempo_id=tempos_by_name[s.tempo].id,
             rep_range_min=s.rep_range_min,
             rep_range_max=s.rep_range_max,
+            target_weight=s.target_weight,
         ))
 
     db.commit()
@@ -422,6 +424,7 @@ def _prescription_to_domain(row: ExercisePrescriptionModel) -> ExercisePrescript
                 rep_range_min=s.rep_range_min,
                 rep_range_max=s.rep_range_max,
                 target_rpe=target_rpe,
+                target_weight=s.target_weight,
             )
             for s in row.sets
         ],
