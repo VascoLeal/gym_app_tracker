@@ -111,8 +111,8 @@ def test_hitting_top_of_range_auto_generates_increased_weight_for_next_week(
     prescriptions = client.get(f"/weeks/{week_2_id}/prescriptions").json()
     assert len(prescriptions) == 1
     assert "Auto-progressed" in prescriptions[0]["notes"]
-    assert "increased load" in prescriptions[0]["notes"]
-    assert prescriptions[0]["sets"][0]["target_weight"] == 105.0  # 100 * 1.05
+    assert "hit the top of the rep range" in prescriptions[0]["notes"]
+    assert prescriptions[0]["sets"][0]["target_weight"] == 105.0  # 100 -> next barbell rung
 
 
 def test_missing_reps_auto_generates_decreased_weight(client, athlete_id, exercise_ids):
@@ -124,8 +124,8 @@ def test_missing_reps_auto_generates_decreased_weight(client, athlete_id, exerci
 
     week_2_id = mesocycle["weeks"][1]["id"]
     prescriptions = client.get(f"/weeks/{week_2_id}/prescriptions").json()
-    assert "reduced load" in prescriptions[0]["notes"]
-    assert prescriptions[0]["sets"][0]["target_weight"] == 95.0  # 100 * 0.95
+    assert "missed the bottom of the rep range" in prescriptions[0]["notes"]
+    assert prescriptions[0]["sets"][0]["target_weight"] == 95.0  # 100 -> prior barbell rung
 
 
 def test_reduced_load_deload_week_gets_flat_fifty_percent_regardless_of_performance(
@@ -190,3 +190,98 @@ def test_exercise_swap_does_not_generate_a_recommendation(client, athlete_id, ex
 
     week_2_id = mesocycle["weeks"][1]["id"]
     assert client.get(f"/weeks/{week_2_id}/prescriptions").json() == []
+
+
+def test_dumbbell_tiered_increment_below_ten(client, athlete_id, exercise_ids):
+    mesocycle = client.post(
+        "/mesocycles",
+        json={
+            "athlete_id": athlete_id, "name": "Arms Block", "number_of_weeks": 4,
+            "deload_strategy": "none",
+            "workout_templates": [{
+                "name": "Arms A", "order_in_split": 1,
+                "exercise_ids": [exercise_ids["Dumbbell Bicep Curl"]],
+            }],
+        },
+    ).json()
+    slot = mesocycle["workout_templates"][0]["exercises"][0]
+    week_1 = mesocycle["weeks"][0]
+    client.post(
+        f"/template-exercises/{slot['id']}/prescriptions",
+        json={
+            "week_id": week_1["id"], "notes": "",
+            "sets": [{"set_type": "straight_set", "tempo": "normal",
+                      "rep_range_min": 10, "rep_range_max": 12, "target_weight": 8.0}],
+        },
+    )
+
+    _run_session(client, mesocycle["id"], actual_weight=8.0, actual_reps=12, actual_rpe=7.0)
+
+    week_2_id = mesocycle["weeks"][1]["id"]
+    prescriptions = client.get(f"/weeks/{week_2_id}/prescriptions").json()
+    assert prescriptions[0]["sets"][0]["target_weight"] == 9.0  # +1kg below the 10kg tier
+
+
+def test_warmup_sets_excluded_from_decision_and_carried_forward_unchanged(
+    client, athlete_id, exercise_ids
+):
+    """Directly validates the bug the author's bench-press example
+    surfaced: a prescription mixing warm-up sets (different weight/reps,
+    no real rep-range target) with working sets must base the progression
+    decision ONLY on the working sets, and must leave warm-up weights
+    untouched in the generated next week."""
+    mesocycle = _create_mesocycle(client, athlete_id, exercise_ids, weeks=4, deload_strategy="none")
+    slot = mesocycle["workout_templates"][0]["exercises"][0]
+    week_1 = mesocycle["weeks"][0]
+
+    prescription = client.post(
+        f"/template-exercises/{slot['id']}/prescriptions",
+        json={
+            "week_id": week_1["id"], "notes": "",
+            "sets": [
+                {"set_type": "warmup_set", "tempo": "normal",
+                 "rep_range_min": 10, "rep_range_max": 10, "target_weight": 20.0},
+                {"set_type": "warmup_set", "tempo": "normal",
+                 "rep_range_min": 6, "rep_range_max": 6, "target_weight": 40.0},
+                {"set_type": "warmup_set", "tempo": "normal",
+                 "rep_range_min": 4, "rep_range_max": 4, "target_weight": 50.0},
+                {"set_type": "straight_set", "tempo": "normal",
+                 "rep_range_min": 8, "rep_range_max": 10, "target_weight": 55.0},
+                {"set_type": "straight_set", "tempo": "normal",
+                 "rep_range_min": 8, "rep_range_max": 10, "target_weight": 55.0},
+                {"set_type": "straight_set", "tempo": "normal",
+                 "rep_range_min": 8, "rep_range_max": 10, "target_weight": 55.0},
+            ],
+        },
+    ).json()
+
+    session = client.post(f"/mesocycles/{mesocycle['id']}/sessions/start").json()
+    performed_exercise_id = session["performed_exercises"][0]["id"]
+    prescribed_sets = session["performed_exercises"][0]["prescribed_sets"]
+
+    # Log warm-ups exactly as prescribed (their own light weights/low reps —
+    # if these were ever compared against the WORKING rep range of 8-10,
+    # a 4-rep warm-up set would look like a badly missed set).
+    warmup_actuals = [(20.0, 10, None), (40.0, 6, None), (50.0, 4, None)]
+    working_actuals = [(55.0, 10, 7.0), (55.0, 10, 7.0), (55.0, 10, 7.0)]
+    for prescribed_set, (weight, reps, rpe) in zip(
+        prescribed_sets, warmup_actuals + working_actuals
+    ):
+        client.post(
+            f"/performed-exercises/{performed_exercise_id}/sets",
+            json={"set_prescription_id": prescribed_set["id"],
+                  "actual_weight": weight, "actual_reps": reps, "actual_rpe": rpe},
+        )
+    client.post(f"/workout-sessions/{session['id']}/complete")
+
+    week_2_id = mesocycle["weeks"][1]["id"]
+    next_prescription = client.get(f"/weeks/{week_2_id}/prescriptions").json()[0]
+
+    # Working sets hit the top of their range (10) at target RPE -> increase.
+    assert "hit the top of the rep range" in next_prescription["notes"]
+    next_sets = next_prescription["sets"]
+    warmup_weights = [s["target_weight"] for s in next_sets if s["set_type"] == "warmup_set"]
+    working_weights = [s["target_weight"] for s in next_sets if s["set_type"] == "straight_set"]
+
+    assert warmup_weights == [20.0, 40.0, 50.0]  # unchanged
+    assert working_weights == [60.0, 60.0, 60.0]  # 55 -> next barbell rung

@@ -77,6 +77,27 @@ class AddTemplateExerciseRequest(BaseModel):
     exercise_id: int
 
 
+class ReorderTemplateExerciseRequest(BaseModel):
+    new_position: int = Field(ge=1)
+
+
+class AddSetRequest(BaseModel):
+    set_type: str
+    tempo: str
+    rep_range_min: int
+    rep_range_max: int
+    target_weight: float | None = None
+
+
+class EditSetRequest(BaseModel):
+    set_type: str | None = None
+    tempo: str | None = None
+    rep_range_min: int | None = None
+    rep_range_max: int | None = None
+    target_weight: float | None = None
+    clear_target_weight: bool = False
+
+
 class WeekResponse(BaseModel):
     id: int
     week_number: int

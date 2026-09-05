@@ -46,6 +46,14 @@ class TemplateExerciseNotFound(Exception):
     pass
 
 
+class SetPrescriptionNotFound(Exception):
+    pass
+
+
+class ExercisePrescriptionNotFound(Exception):
+    pass
+
+
 @dataclass
 class WorkoutTemplateInput:
     name: str
@@ -294,6 +302,143 @@ def remove_template_exercise(db: Session, template_exercise_id: int) -> None:
         te.order_in_workout = position
 
     db.commit()
+
+
+def reorder_template_exercise(
+    db: Session, template_exercise_id: int, new_position: int
+) -> list[TemplateExerciseModel]:
+    """Moves one exercise slot to a new position within its workout
+    template, shifting everything else to keep a contiguous 1..N
+    ordering. Same "not after the mesocycle has started" restriction as
+    the other exercise-selection edits — changing exercise ORDER still
+    changes fatigue/ordering dynamics mid-block, which the fixed-shape
+    principle is meant to protect against. Returns the whole template's
+    exercises in their new order."""
+    template_exercise = (
+        db.query(TemplateExerciseModel)
+        .filter(TemplateExerciseModel.id == template_exercise_id)
+        .first()
+    )
+    if template_exercise is None:
+        raise TemplateExerciseNotFound(template_exercise_id)
+
+    template = template_exercise.workout_template
+    _assert_not_started(template.mesocycle)
+
+    exercises = sorted(template.exercises, key=lambda te: te.order_in_workout)
+    exercises.remove(template_exercise)
+    clamped_position = max(1, min(new_position, len(exercises) + 1))
+    exercises.insert(clamped_position - 1, template_exercise)
+
+    for position, te in enumerate(exercises, start=1):
+        te.order_in_workout = position
+
+    db.commit()
+    for te in exercises:
+        db.refresh(te)
+    return exercises
+
+
+def add_set_to_prescription(
+    db: Session, exercise_prescription_id: int, set_input: "SetPrescriptionInput"
+) -> SetPrescriptionModel:
+    """Adds one more planned set to an existing prescription — the "edit
+    number of sets" the author asked for. Not restricted to before the
+    mesocycle starts: unlike exercise selection, tweaking a specific
+    week's set count doesn't violate the "shape stays fixed" principle,
+    since each week already has its own independent prescription."""
+    prescription = (
+        db.query(ExercisePrescriptionModel)
+        .filter(ExercisePrescriptionModel.id == exercise_prescription_id)
+        .first()
+    )
+    if prescription is None:
+        raise ExercisePrescriptionNotFound(exercise_prescription_id)
+
+    set_types_by_name = {s.name: s for s in db.query(SetTypeModel).all()}
+    tempos_by_name = {t.name: t for t in db.query(TempoModel).all()}
+    next_set_number = len(prescription.sets) + 1
+
+    new_set = SetPrescriptionModel(
+        exercise_prescription_id=exercise_prescription_id,
+        set_number=next_set_number,
+        set_type_id=set_types_by_name[set_input.set_type].id,
+        tempo_id=tempos_by_name[set_input.tempo].id,
+        rep_range_min=set_input.rep_range_min,
+        rep_range_max=set_input.rep_range_max,
+        target_weight=set_input.target_weight,
+    )
+    db.add(new_set)
+    db.commit()
+    db.refresh(new_set)
+    return new_set
+
+
+def remove_set_from_prescription(db: Session, set_prescription_id: int) -> None:
+    set_prescription = (
+        db.query(SetPrescriptionModel)
+        .filter(SetPrescriptionModel.id == set_prescription_id)
+        .first()
+    )
+    if set_prescription is None:
+        raise SetPrescriptionNotFound(set_prescription_id)
+
+    exercise_prescription_id = set_prescription.exercise_prescription_id
+    db.delete(set_prescription)
+    db.flush()
+
+    remaining = (
+        db.query(SetPrescriptionModel)
+        .filter(SetPrescriptionModel.exercise_prescription_id == exercise_prescription_id)
+        .order_by(SetPrescriptionModel.set_number)
+        .all()
+    )
+    for position, sp in enumerate(remaining, start=1):
+        sp.set_number = position
+
+    db.commit()
+
+
+def edit_set_in_prescription(
+    db: Session,
+    set_prescription_id: int,
+    set_type: str | None = None,
+    tempo: str | None = None,
+    rep_range_min: int | None = None,
+    rep_range_max: int | None = None,
+    target_weight: float | None = None,
+    clear_target_weight: bool = False,
+) -> SetPrescriptionModel:
+    """Edits an existing set's own fields in place. Any argument left as
+    None is unchanged, EXCEPT target_weight — since None is a legitimate
+    value there (no recommendation), clear_target_weight explicitly opts
+    into clearing it rather than overloading None to mean "don't touch"."""
+    set_prescription = (
+        db.query(SetPrescriptionModel)
+        .filter(SetPrescriptionModel.id == set_prescription_id)
+        .first()
+    )
+    if set_prescription is None:
+        raise SetPrescriptionNotFound(set_prescription_id)
+
+    if set_type is not None:
+        set_type_row = db.query(SetTypeModel).filter(SetTypeModel.name == set_type).first()
+        set_prescription.set_type_id = set_type_row.id
+    if tempo is not None:
+        tempo_row = db.query(TempoModel).filter(TempoModel.name == tempo).first()
+        set_prescription.tempo_id = tempo_row.id
+    if rep_range_min is not None:
+        set_prescription.rep_range_min = rep_range_min
+    if rep_range_max is not None:
+        set_prescription.rep_range_max = rep_range_max
+    if clear_target_weight:
+        set_prescription.target_weight = None
+    elif target_weight is not None:
+        set_prescription.target_weight = target_weight
+
+    db.commit()
+    db.refresh(set_prescription)
+    return set_prescription
 
 
 def delete_mesocycle(db: Session, mesocycle_id: int) -> None:

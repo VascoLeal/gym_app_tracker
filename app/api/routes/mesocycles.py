@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.schemas import (
+    AddSetRequest,
     AddTemplateExerciseRequest,
+    EditSetRequest,
     EditTemplateExerciseRequest,
     ExercisePrescriptionResponse,
     MesocycleCopyRequest,
@@ -10,6 +12,7 @@ from app.api.schemas import (
     MesocycleResponse,
     MesocycleStopRequest,
     PrescriptionCreateRequest,
+    ReorderTemplateExerciseRequest,
     SetPrescriptionResponse,
     TemplateExerciseResponse,
     WeekResponse,
@@ -17,24 +20,30 @@ from app.api.schemas import (
 )
 from app.application.mesocycle_service import (
     AthleteAlreadyHasActiveMesocycle,
+    ExercisePrescriptionNotFound,
     InvalidMesocycleLength,
     MesocycleAlreadyStarted,
     MesocycleNotFound,
     MesocycleStillActive,
     SetPrescriptionInput,
+    SetPrescriptionNotFound,
     TemplateExerciseNotFound,
     WorkoutTemplateInput,
     add_prescription,
+    add_set_to_prescription,
     add_template_exercise,
     copy_mesocycle,
     create_mesocycle,
     current_position,
     delete_mesocycle,
+    edit_set_in_prescription,
     edit_template_exercise,
     get_mesocycle,
     get_week_prescriptions,
     list_athlete_mesocycles,
+    remove_set_from_prescription,
     remove_template_exercise,
+    reorder_template_exercise,
     stop_mesocycle,
 )
 from app.infrastructure.database import get_db
@@ -215,6 +224,96 @@ def add_template_exercise_route(
         id=te.id, exercise_id=te.exercise_id, exercise_name=te.exercise.name,
         order_in_workout=te.order_in_workout,
     )
+
+
+@router.patch(
+    "/template-exercises/{template_exercise_id}/order",
+    response_model=list[TemplateExerciseResponse],
+)
+def reorder_template_exercise_route(
+    template_exercise_id: int, body: ReorderTemplateExerciseRequest, db: Session = Depends(get_db)
+) -> list[TemplateExerciseResponse]:
+    try:
+        exercises = reorder_template_exercise(db, template_exercise_id, body.new_position)
+    except TemplateExerciseNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Exercise slot not found."
+        ) from exc
+    except MesocycleAlreadyStarted as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Can't reorder exercises after the mesocycle has started.",
+        ) from exc
+    return [
+        TemplateExerciseResponse(
+            id=te.id, exercise_id=te.exercise_id, exercise_name=te.exercise.name,
+            order_in_workout=te.order_in_workout,
+        )
+        for te in exercises
+    ]
+
+
+@router.post(
+    "/exercise-prescriptions/{exercise_prescription_id}/sets",
+    response_model=SetPrescriptionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_set_route(
+    exercise_prescription_id: int, body: AddSetRequest, db: Session = Depends(get_db)
+) -> SetPrescriptionResponse:
+    try:
+        sp = add_set_to_prescription(
+            db, exercise_prescription_id,
+            SetPrescriptionInput(
+                body.set_type, body.tempo, body.rep_range_min, body.rep_range_max,
+                body.target_weight,
+            ),
+        )
+    except ExercisePrescriptionNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Exercise prescription not found."
+        ) from exc
+    return SetPrescriptionResponse(
+        id=sp.id, set_number=sp.set_number, set_type=sp.set_type.name,
+        tempo=sp.tempo.name, rep_range_min=sp.rep_range_min,
+        rep_range_max=sp.rep_range_max, target_rpe=None, target_weight=sp.target_weight,
+    )
+
+
+@router.patch("/set-prescriptions/{set_prescription_id}", response_model=SetPrescriptionResponse)
+def edit_set_route(
+    set_prescription_id: int, body: EditSetRequest, db: Session = Depends(get_db)
+) -> SetPrescriptionResponse:
+    try:
+        sp = edit_set_in_prescription(
+            db, set_prescription_id,
+            set_type=body.set_type, tempo=body.tempo,
+            rep_range_min=body.rep_range_min, rep_range_max=body.rep_range_max,
+            target_weight=body.target_weight, clear_target_weight=body.clear_target_weight,
+        )
+    except SetPrescriptionNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Set not found."
+        ) from exc
+    target_rpe = sp.exercise_prescription.week.target_rpe
+    return SetPrescriptionResponse(
+        id=sp.id, set_number=sp.set_number, set_type=sp.set_type.name,
+        tempo=sp.tempo.name, rep_range_min=sp.rep_range_min,
+        rep_range_max=sp.rep_range_max, target_rpe=target_rpe, target_weight=sp.target_weight,
+    )
+
+
+@router.delete(
+    "/set-prescriptions/{set_prescription_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_set_route(set_prescription_id: int, db: Session = Depends(get_db)) -> None:
+    try:
+        remove_set_from_prescription(db, set_prescription_id)
+    except SetPrescriptionNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Set not found."
+        ) from exc
 
 
 @router.delete(
