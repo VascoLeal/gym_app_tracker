@@ -50,7 +50,7 @@ def exercise_ids(client):
 
 
 def _create_mesocycle(client, athlete_id, exercise_ids, weeks, deload_strategy):
-    return client.post(
+    created = client.post(
         "/mesocycles",
         json={
             "athlete_id": athlete_id,
@@ -63,6 +63,7 @@ def _create_mesocycle(client, athlete_id, exercise_ids, weeks, deload_strategy):
             }],
         },
     ).json()
+    return client.post(f"/mesocycles/{created['id']}/start").json()
 
 
 def _prescribe_week_1(client, mesocycle):
@@ -204,6 +205,7 @@ def test_dumbbell_tiered_increment_below_ten(client, athlete_id, exercise_ids):
             }],
         },
     ).json()
+    mesocycle = client.post(f"/mesocycles/{mesocycle['id']}/start").json()
     slot = mesocycle["workout_templates"][0]["exercises"][0]
     week_1 = mesocycle["weeks"][0]
     client.post(

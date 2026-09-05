@@ -18,6 +18,7 @@ from enum import Enum
 
 
 class MesocycleStatus(str, Enum):
+    DRAFT = "draft"
     ACTIVE = "active"
     COMPLETED = "completed"
     ABANDONED = "abandoned"

@@ -69,6 +69,30 @@ class MesocycleStopRequest(BaseModel):
     keep_as_history: bool
 
 
+class MesocycleEditRequest(BaseModel):
+    name: str | None = None
+    number_of_weeks: int | None = Field(default=None, ge=4, le=12)
+    deload_strategy: str | None = None
+
+
+class AddWorkoutTemplateRequest(BaseModel):
+    name: str
+    order_in_split: int
+    exercise_ids: list[int] = Field(min_length=1)
+
+
+class EditWorkoutTemplateRequest(BaseModel):
+    name: str
+
+
+class ReorderWorkoutTemplateRequest(BaseModel):
+    new_position: int = Field(ge=1)
+
+
+class EditPrescriptionNotesRequest(BaseModel):
+    notes: str
+
+
 class EditTemplateExerciseRequest(BaseModel):
     exercise_id: int
 

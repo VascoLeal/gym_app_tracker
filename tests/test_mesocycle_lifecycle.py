@@ -75,7 +75,7 @@ def _mesocycle_payload(athlete_id, exercise_ids, weeks=4, name="Block 1"):
     }
 
 
-def test_create_mesocycle_auto_generates_weeks_with_last_as_deload(
+def test_create_mesocycle_starts_as_draft_with_weeks_generated(
     client, athlete_id, exercise_ids
 ):
     mesocycle = client.post(
@@ -86,8 +86,7 @@ def test_create_mesocycle_auto_generates_weeks_with_last_as_deload(
     assert [w["is_deload"] for w in mesocycle["weeks"]] == [
         False, False, False, False, False, True,
     ]
-    assert mesocycle["status"] == "active"
-    assert mesocycle["current_week_number"] == 1
+    assert mesocycle["status"] == "draft"
     assert mesocycle["sessions_completed"] == 0
 
 
@@ -97,11 +96,53 @@ def test_mesocycle_length_out_of_range_is_rejected(client, athlete_id, exercise_
     assert response.status_code == 422
 
 
-def test_cannot_start_second_active_mesocycle(client, athlete_id, exercise_ids):
-    client.post("/mesocycles", json=_mesocycle_payload(athlete_id, exercise_ids))
-    response = client.post(
+def test_can_create_multiple_drafts_while_one_is_active(client, athlete_id, exercise_ids):
+    """The author's explicit ask: planning the next block while still
+    training the current one shouldn't be blocked by anything."""
+    first = client.post(
+        "/mesocycles", json=_mesocycle_payload(athlete_id, exercise_ids, name="Block 1")
+    ).json()
+    client.post(f"/mesocycles/{first['id']}/start")
+
+    # Creating more drafts is always allowed, active mesocycle notwithstanding.
+    second = client.post(
         "/mesocycles", json=_mesocycle_payload(athlete_id, exercise_ids, name="Block 2")
     )
+    third = client.post(
+        "/mesocycles", json=_mesocycle_payload(athlete_id, exercise_ids, name="Block 3")
+    )
+    assert second.status_code == 201
+    assert third.status_code == 201
+    assert second.json()["status"] == "draft"
+    assert third.json()["status"] == "draft"
+
+    all_mesocycles = client.get(f"/athletes/{athlete_id}/mesocycles").json()
+    assert len(all_mesocycles) == 3
+
+
+def test_starting_a_second_draft_while_one_is_active_is_blocked(
+    client, athlete_id, exercise_ids
+):
+    first = client.post(
+        "/mesocycles", json=_mesocycle_payload(athlete_id, exercise_ids, name="Block 1")
+    ).json()
+    client.post(f"/mesocycles/{first['id']}/start")
+
+    second = client.post(
+        "/mesocycles", json=_mesocycle_payload(athlete_id, exercise_ids, name="Block 2")
+    ).json()
+    # Creating it succeeded (it's just a draft) — but STARTING it is what's gated.
+    response = client.post(f"/mesocycles/{second['id']}/start")
+    assert response.status_code == 409
+
+
+def test_cannot_start_a_mesocycle_twice(client, athlete_id, exercise_ids):
+    mesocycle = client.post(
+        "/mesocycles", json=_mesocycle_payload(athlete_id, exercise_ids)
+    ).json()
+    client.post(f"/mesocycles/{mesocycle['id']}/start")
+
+    response = client.post(f"/mesocycles/{mesocycle['id']}/start")
     assert response.status_code == 409
 
 
@@ -109,17 +150,19 @@ def test_stop_and_keep_as_history_then_start_new_one(client, athlete_id, exercis
     first = client.post(
         "/mesocycles", json=_mesocycle_payload(athlete_id, exercise_ids)
     ).json()
+    client.post(f"/mesocycles/{first['id']}/start")
 
     stop_response = client.post(
         f"/mesocycles/{first['id']}/stop", json={"keep_as_history": True}
     )
     assert stop_response.status_code == 204
 
-    # Now a new one can start.
+    # Now a new one can be created AND started.
     second = client.post(
         "/mesocycles", json=_mesocycle_payload(athlete_id, exercise_ids, name="Block 2")
-    )
-    assert second.status_code == 201
+    ).json()
+    start_response = client.post(f"/mesocycles/{second['id']}/start")
+    assert start_response.status_code == 200
 
     history = client.get(f"/athletes/{athlete_id}/mesocycles").json()
     assert len(history) == 2
@@ -131,6 +174,7 @@ def test_stop_without_keeping_history_deletes_it(client, athlete_id, exercise_id
     first = client.post(
         "/mesocycles", json=_mesocycle_payload(athlete_id, exercise_ids)
     ).json()
+    client.post(f"/mesocycles/{first['id']}/start")
 
     client.post(f"/mesocycles/{first['id']}/stop", json={"keep_as_history": False})
 
@@ -139,25 +183,32 @@ def test_stop_without_keeping_history_deletes_it(client, athlete_id, exercise_id
     assert history == []
 
 
-def test_copy_mesocycle_duplicates_shape_not_prescriptions(
+def test_copy_mesocycle_produces_a_draft_not_active(
     client, athlete_id, exercise_ids
 ):
     original = client.post(
         "/mesocycles", json=_mesocycle_payload(athlete_id, exercise_ids)
     ).json()
-    client.post(f"/mesocycles/{original['id']}/stop", json={"keep_as_history": True})
+    client.post(f"/mesocycles/{original['id']}/start")
 
     copy = client.post(
         f"/mesocycles/{original['id']}/copy", json={"new_name": "Block 1 (repeat)"}
     ).json()
 
     assert copy["name"] == "Block 1 (repeat)"
-    assert copy["status"] == "active"
+    assert copy["status"] == "draft"  # NOT active — start it separately when ready
     assert len(copy["workout_templates"]) == len(original["workout_templates"])
     push_a = next(t for t in copy["workout_templates"] if t["name"] == "Push A")
     assert [e["exercise_name"] for e in push_a["exercises"]] == [
         "Barbell Bench Press", "Cable Triceps Overhead Extension",
     ]
+
+    # Since the original is still active, starting the copy right away is blocked.
+    assert client.post(f"/mesocycles/{copy['id']}/start").status_code == 409
+
+    # But stopping the original frees it up.
+    client.post(f"/mesocycles/{original['id']}/stop", json={"keep_as_history": True})
+    assert client.post(f"/mesocycles/{copy['id']}/start").status_code == 200
 
 
 def test_current_position_advances_by_completed_sessions_not_calendar(
@@ -171,9 +222,9 @@ def test_current_position_advances_by_completed_sessions_not_calendar(
     mesocycle = client.post(
         "/mesocycles", json=_mesocycle_payload(athlete_id, exercise_ids)
     ).json()
+    mesocycle = client.post(f"/mesocycles/{mesocycle['id']}/start").json()
 
-    # Simulate 3 completed sessions directly (Workout Session milestone
-    # will do this via real logging later).
+    # Simulate 3 completed sessions directly.
     db = client.session_factory()
     row = db.query(MesocycleModel).filter(MesocycleModel.id == mesocycle["id"]).first()
     row.sessions_completed = 3

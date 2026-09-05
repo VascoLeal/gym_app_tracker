@@ -50,7 +50,7 @@ def exercise_ids(client):
 
 
 def _create_mesocycle(client, athlete_id, exercise_ids, weeks, deload_strategy):
-    return client.post(
+    created = client.post(
         "/mesocycles",
         json={
             "athlete_id": athlete_id,
@@ -63,6 +63,7 @@ def _create_mesocycle(client, athlete_id, exercise_ids, weeks, deload_strategy):
             }],
         },
     ).json()
+    return client.post(f"/mesocycles/{created['id']}/start").json()
 
 
 def test_rpe_ramp_four_weeks_no_deload_matches_author_example(client, athlete_id, exercise_ids):

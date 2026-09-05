@@ -50,7 +50,7 @@ def exercise_ids(client):
 
 
 def _create_mesocycle(client, athlete_id, exercise_ids, weeks, deload_strategy, name="Block 1"):
-    return client.post(
+    created = client.post(
         "/mesocycles",
         json={
             "athlete_id": athlete_id,
@@ -65,6 +65,7 @@ def _create_mesocycle(client, athlete_id, exercise_ids, weeks, deload_strategy, 
             ],
         },
     ).json()
+    return client.post(f"/mesocycles/{created['id']}/start").json()
 
 
 def _run_one_session(client, mesocycle_id):
@@ -92,7 +93,7 @@ def test_mesocycle_auto_completes_with_reduced_load_deload(client, athlete_id, e
     assert final_mesocycle["status"] == "completed"
     assert final_mesocycle["sessions_completed"] == 4
 
-    # And a new mesocycle can now be started — the old one no longer blocks it.
+    # A new mesocycle can be created AND started now — the completed one no longer blocks it.
     new_one = client.post(
         "/mesocycles",
         json={
@@ -103,8 +104,11 @@ def test_mesocycle_auto_completes_with_reduced_load_deload(client, athlete_id, e
                 "exercise_ids": [exercise_ids["Barbell Bench Press"]],
             }],
         },
-    )
-    assert new_one.status_code == 201
+    ).json()
+    assert new_one["status"] == "draft"
+    start_response = client.post(f"/mesocycles/{new_one['id']}/start")
+    assert start_response.status_code == 200
+    assert start_response.json()["status"] == "active"
 
 
 def test_mesocycle_with_rest_deload_completes_without_a_deload_week_session(

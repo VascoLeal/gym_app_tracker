@@ -51,7 +51,7 @@ def exercise_ids(client):
 
 @pytest.fixture()
 def mesocycle(client, athlete_id, exercise_ids):
-    return client.post(
+    created = client.post(
         "/mesocycles",
         json={
             "athlete_id": athlete_id, "name": "Block 1", "number_of_weeks": 4,
@@ -66,6 +66,7 @@ def mesocycle(client, athlete_id, exercise_ids):
             }],
         },
     ).json()
+    return client.post(f"/mesocycles/{created['id']}/start").json()
 
 
 def test_reorder_moves_exercise_and_shifts_others(client, mesocycle):

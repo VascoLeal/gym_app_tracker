@@ -53,7 +53,7 @@ def exercise_ids(client):
 
 @pytest.fixture()
 def mesocycle(client, athlete_id, exercise_ids):
-    return client.post(
+    created = client.post(
         "/mesocycles",
         json={
             "athlete_id": athlete_id,
@@ -72,6 +72,7 @@ def mesocycle(client, athlete_id, exercise_ids):
             ],
         },
     ).json()
+    return client.post(f"/mesocycles/{created['id']}/start").json()
 
 
 def _add_prescription(client, mesocycle, template_name, week_number):
