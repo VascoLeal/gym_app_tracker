@@ -65,7 +65,10 @@ def test_register_then_login(client):
         json={"email": "athlete@example.com", "password": "correct-horse-battery"},
     )
     assert login_response.status_code == 200
-    assert login_response.json()["email"] == "athlete@example.com"
+    body = login_response.json()
+    assert body["athlete"]["email"] == "athlete@example.com"
+    assert body["token_type"] == "bearer"
+    assert isinstance(body["access_token"], str) and len(body["access_token"]) > 0
 
 
 def test_login_with_wrong_password_fails(client):
@@ -86,3 +89,32 @@ def test_duplicate_registration_fails(client):
     second = client.post("/auth/register", json=payload)
     assert first.status_code == 201
     assert second.status_code == 409
+
+
+def test_me_with_valid_token_returns_the_right_athlete(client):
+    client.post(
+        "/auth/register",
+        json={"email": "athlete4@example.com", "password": "correct-horse-battery"},
+    )
+    login = client.post(
+        "/auth/login",
+        json={"email": "athlete4@example.com", "password": "correct-horse-battery"},
+    ).json()
+
+    response = client.get(
+        "/auth/me", headers={"Authorization": f"Bearer {login['access_token']}"}
+    )
+    assert response.status_code == 200
+    assert response.json()["email"] == "athlete4@example.com"
+
+
+def test_me_without_token_is_rejected(client):
+    response = client.get("/auth/me")
+    assert response.status_code in (401, 403)  # HTTPBearer returns 403 with no header at all
+
+
+def test_me_with_garbage_token_is_rejected(client):
+    response = client.get(
+        "/auth/me", headers={"Authorization": "Bearer not-a-real-token"}
+    )
+    assert response.status_code == 401

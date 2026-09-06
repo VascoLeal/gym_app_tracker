@@ -26,6 +26,12 @@ class AthleteResponse(BaseModel):
     created_at: datetime
 
 
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    athlete: AthleteResponse
+
+
 class MuscleContributionResponse(BaseModel):
     muscle_name: str
     contribution: float

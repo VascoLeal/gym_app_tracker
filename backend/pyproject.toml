@@ -1,6 +1,6 @@
 [project]
 name = "voacs"
-version = "0.2.0"
+version = "0.2.1"
 description = "Add your description here"
 requires-python = ">=3.14"
 dependencies = [
@@ -10,6 +10,7 @@ dependencies = [
     "fastapi>=0.141.1",
     "psycopg[binary]>=3.3.4",
     "pydantic-settings>=2.15.0",
+    "pyjwt>=2.13.0",
     "sqlalchemy>=2.0",
     "uvicorn[standard]>=0.52.4",
 ]

@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     # Example: postgresql+psycopg://user:password@host/dbname
     database_url: str
 
+    # Signs JWT access tokens (HS256 — symmetric, fine for a single backend).
+    # Generate a real one with: python -c "import secrets; print(secrets.token_hex(32))"
+    jwt_secret_key: str
+    jwt_expiry_days: int = 30
+
 
 @lru_cache
 def get_settings() -> Settings:
