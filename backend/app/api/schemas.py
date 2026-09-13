@@ -60,7 +60,6 @@ class WorkoutTemplateCreateRequest(BaseModel):
 
 
 class MesocycleCreateRequest(BaseModel):
-    athlete_id: int
     name: str
     number_of_weeks: int = Field(ge=4, le=12)
     deload_strategy: str

@@ -38,10 +38,18 @@ def client():
 
 @pytest.fixture()
 def athlete_id(client):
-    return client.post(
+    client.post(
         "/auth/register",
         json={"email": "lifter@example.com", "password": "correct-horse-battery"},
-    ).json()["id"]
+    )
+    login = client.post(
+        "/auth/login",
+        json={"email": "lifter@example.com", "password": "correct-horse-battery"},
+    ).json()
+    # Every subsequent request through this client now carries the token —
+    # individual tests don't need to attach it themselves.
+    client.headers["Authorization"] = f"Bearer {login['access_token']}"
+    return login["athlete"]["id"]
 
 
 @pytest.fixture()
@@ -53,7 +61,6 @@ def _create_mesocycle(client, athlete_id, exercise_ids, weeks, deload_strategy):
     created = client.post(
         "/mesocycles",
         json={
-            "athlete_id": athlete_id,
             "name": "Block 1",
             "number_of_weeks": weeks,
             "deload_strategy": deload_strategy,
@@ -197,7 +204,7 @@ def test_dumbbell_tiered_increment_below_ten(client, athlete_id, exercise_ids):
     mesocycle = client.post(
         "/mesocycles",
         json={
-            "athlete_id": athlete_id, "name": "Arms Block", "number_of_weeks": 4,
+            "name": "Arms Block", "number_of_weeks": 4,
             "deload_strategy": "none",
             "workout_templates": [{
                 "name": "Arms A", "order_in_split": 1,

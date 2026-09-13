@@ -34,6 +34,10 @@ class AthleteAlreadyHasActiveMesocycle(Exception):
 
 
 class MesocycleNotFound(Exception):
+    """Also raised when a mesocycle exists but belongs to a different
+    athlete — deliberately indistinguishable from "doesn't exist" at all,
+    so a request can't be used to probe whether someone else's mesocycle
+    exists."""
     pass
 
 
@@ -64,6 +68,9 @@ class WeekAlreadyTrained(Exception):
 
 
 class TemplateExerciseNotFound(Exception):
+    """Also raised for a real template exercise owned by someone else —
+    see MesocycleNotFound's docstring; same reasoning applies everywhere
+    ownership is checked."""
     pass
 
 
@@ -257,17 +264,21 @@ def _create_workout_templates(
             ))
 
 
-def start_mesocycle(db: Session, mesocycle_id: int) -> MesocycleModel:
+def start_mesocycle(db: Session, mesocycle_id: int, athlete_id: int) -> MesocycleModel:
     """Activates a DRAFT mesocycle. This is where the one-active-at-a-time
     rule is enforced now — not at creation time — so an athlete can freely
     draft up future blocks while still training a current one."""
-    mesocycle = db.query(MesocycleModel).filter(MesocycleModel.id == mesocycle_id).first()
+    mesocycle = (
+        db.query(MesocycleModel)
+        .filter(MesocycleModel.id == mesocycle_id, MesocycleModel.athlete_id == athlete_id)
+        .first()
+    )
     if mesocycle is None:
         raise MesocycleNotFound(mesocycle_id)
     if mesocycle.status != MesocycleStatus.DRAFT.value:
         raise MesocycleNotDraft(mesocycle.status)
 
-    _assert_no_active_mesocycle(db, mesocycle.athlete_id)
+    _assert_no_active_mesocycle(db, athlete_id)
 
     mesocycle.status = MesocycleStatus.ACTIVE.value
     db.commit()
@@ -278,6 +289,7 @@ def start_mesocycle(db: Session, mesocycle_id: int) -> MesocycleModel:
 def edit_mesocycle(
     db: Session,
     mesocycle_id: int,
+    athlete_id: int,
     name: str | None = None,
     number_of_weeks: int | None = None,
     deload_strategy_name: str | None = None,
@@ -285,7 +297,7 @@ def edit_mesocycle(
     """name is always editable. number_of_weeks/deload_strategy_name are
     foundational shape — only editable before any session has been
     logged, since they drive the RPE ramp and total-session math."""
-    mesocycle = get_mesocycle(db, mesocycle_id)
+    mesocycle = get_mesocycle(db, mesocycle_id, athlete_id)
     if mesocycle is None:
         raise MesocycleNotFound(mesocycle_id)
     _assert_mutable(mesocycle)
@@ -319,11 +331,15 @@ def edit_mesocycle(
     return mesocycle
 
 
-def stop_mesocycle(db: Session, mesocycle_id: int, keep_as_history: bool) -> None:
+def stop_mesocycle(db: Session, mesocycle_id: int, athlete_id: int, keep_as_history: bool) -> None:
     """keep_as_history=True marks it ABANDONED (visible in history, per the
     athlete's choice); False deletes it outright. Only valid for an ACTIVE
     mesocycle — a draft should just be deleted directly."""
-    mesocycle = db.query(MesocycleModel).filter(MesocycleModel.id == mesocycle_id).first()
+    mesocycle = (
+        db.query(MesocycleModel)
+        .filter(MesocycleModel.id == mesocycle_id, MesocycleModel.athlete_id == athlete_id)
+        .first()
+    )
     if mesocycle is None:
         raise MesocycleNotFound(mesocycle_id)
     if mesocycle.status != MesocycleStatus.ACTIVE.value:
@@ -337,14 +353,14 @@ def stop_mesocycle(db: Session, mesocycle_id: int, keep_as_history: bool) -> Non
         db.commit()
 
 
-def copy_mesocycle(db: Session, source_mesocycle_id: int, new_name: str) -> MesocycleModel:
+def copy_mesocycle(db: Session, source_mesocycle_id: int, athlete_id: int, new_name: str) -> MesocycleModel:
     """Duplicates a mesocycle's SHAPE (weeks, workout templates, exercise
     slots) into a brand new DRAFT mesocycle for the same athlete —
     start_mesocycle activates it when the athlete is ready. Deliberately
     does NOT copy prescriptions — starting numbers adjusted from the
     previous mesocycle's performance is progression-engine work, done
     live during training, not at copy time."""
-    source = get_mesocycle(db, source_mesocycle_id)
+    source = get_mesocycle(db, source_mesocycle_id, athlete_id)
     if source is None:
         raise MesocycleNotFound(source_mesocycle_id)
 
@@ -360,7 +376,7 @@ def copy_mesocycle(db: Session, source_mesocycle_id: int, new_name: str) -> Meso
 
     return create_mesocycle(
         db,
-        athlete_id=source.athlete_id,
+        athlete_id=athlete_id,
         name=new_name,
         number_of_weeks=source.number_of_weeks,
         deload_strategy_name=strategy_name,
@@ -368,13 +384,17 @@ def copy_mesocycle(db: Session, source_mesocycle_id: int, new_name: str) -> Meso
     )
 
 
-def delete_mesocycle(db: Session, mesocycle_id: int) -> None:
+def delete_mesocycle(db: Session, mesocycle_id: int, athlete_id: int) -> None:
     """Removes a mesocycle entirely — drafts, completed, or abandoned
     ones. An active mesocycle must be stopped first (via stop_mesocycle).
     This is intentionally NOT blocked by _assert_mutable: choosing to
     delete a completed record entirely is different from tampering with
     its contents, which IS blocked everywhere else."""
-    mesocycle = db.query(MesocycleModel).filter(MesocycleModel.id == mesocycle_id).first()
+    mesocycle = (
+        db.query(MesocycleModel)
+        .filter(MesocycleModel.id == mesocycle_id, MesocycleModel.athlete_id == athlete_id)
+        .first()
+    )
     if mesocycle is None:
         raise MesocycleNotFound(mesocycle_id)
     if mesocycle.status == MesocycleStatus.ACTIVE.value:
@@ -384,7 +404,10 @@ def delete_mesocycle(db: Session, mesocycle_id: int) -> None:
     db.commit()
 
 
-def get_mesocycle(db: Session, mesocycle_id: int) -> MesocycleModel | None:
+def get_mesocycle(db: Session, mesocycle_id: int, athlete_id: int) -> MesocycleModel | None:
+    """athlete_id is enforced right here in the query's WHERE clause —
+    the constitution's "per-user data isolation enforced at the query
+    level" baseline, not a check bolted on after fetching."""
     return (
         db.query(MesocycleModel)
         .options(
@@ -394,7 +417,7 @@ def get_mesocycle(db: Session, mesocycle_id: int) -> MesocycleModel | None:
             .selectinload(WorkoutTemplateModel.exercises)
             .selectinload(TemplateExerciseModel.exercise),
         )
-        .filter(MesocycleModel.id == mesocycle_id)
+        .filter(MesocycleModel.id == mesocycle_id, MesocycleModel.athlete_id == athlete_id)
         .first()
     )
 
@@ -444,11 +467,12 @@ def current_position(mesocycle: MesocycleModel) -> tuple[int, WorkoutTemplateMod
 
 
 def add_workout_template(
-    db: Session, mesocycle_id: int, name: str, order_in_split: int, exercise_ids: list[int]
+    db: Session, mesocycle_id: int, athlete_id: int, name: str, order_in_split: int,
+    exercise_ids: list[int],
 ) -> WorkoutTemplateModel:
     """Adds a whole new training day. Changes training_days_per_week, so
     restricted the same way as exercise-selection edits."""
-    mesocycle = get_mesocycle(db, mesocycle_id)
+    mesocycle = get_mesocycle(db, mesocycle_id, athlete_id)
     if mesocycle is None:
         raise MesocycleNotFound(mesocycle_id)
     _assert_mutable(mesocycle)
@@ -469,14 +493,14 @@ def add_workout_template(
 
 
 def edit_workout_template(
-    db: Session, workout_template_id: int, name: str
+    db: Session, workout_template_id: int, athlete_id: int, name: str
 ) -> WorkoutTemplateModel:
     """Rename only — cosmetic, always allowed regardless of whether the
     mesocycle has started (just not once it's completed/abandoned)."""
     template = (
         db.query(WorkoutTemplateModel).filter(WorkoutTemplateModel.id == workout_template_id).first()
     )
-    if template is None:
+    if template is None or template.mesocycle.athlete_id != athlete_id:
         raise WorkoutTemplateNotFound(workout_template_id)
     _assert_mutable(template.mesocycle)
 
@@ -487,7 +511,7 @@ def edit_workout_template(
 
 
 def reorder_workout_template(
-    db: Session, workout_template_id: int, new_position: int
+    db: Session, workout_template_id: int, athlete_id: int, new_position: int
 ) -> list[WorkoutTemplateModel]:
     """Moves a training day to a new position in the weekly rotation.
     Restricted the same as adding/removing a day — changes the rotation
@@ -495,7 +519,7 @@ def reorder_workout_template(
     template = (
         db.query(WorkoutTemplateModel).filter(WorkoutTemplateModel.id == workout_template_id).first()
     )
-    if template is None:
+    if template is None or template.mesocycle.athlete_id != athlete_id:
         raise WorkoutTemplateNotFound(workout_template_id)
     mesocycle = template.mesocycle
     _assert_mutable(mesocycle)
@@ -515,11 +539,11 @@ def reorder_workout_template(
     return templates
 
 
-def remove_workout_template(db: Session, workout_template_id: int) -> None:
+def remove_workout_template(db: Session, workout_template_id: int, athlete_id: int) -> None:
     template = (
         db.query(WorkoutTemplateModel).filter(WorkoutTemplateModel.id == workout_template_id).first()
     )
-    if template is None:
+    if template is None or template.mesocycle.athlete_id != athlete_id:
         raise WorkoutTemplateNotFound(workout_template_id)
     mesocycle = template.mesocycle
     _assert_mutable(mesocycle)
@@ -540,15 +564,15 @@ def remove_workout_template(db: Session, workout_template_id: int) -> None:
     db.commit()
 
 
-def edit_template_exercise(db: Session, template_exercise_id: int, exercise_id: int) -> TemplateExerciseModel:
+def edit_template_exercise(
+    db: Session, template_exercise_id: int, athlete_id: int, exercise_id: int
+) -> TemplateExerciseModel:
     template_exercise = (
         db.query(TemplateExerciseModel)
-        .join(WorkoutTemplateModel)
-        .join(MesocycleModel)
         .filter(TemplateExerciseModel.id == template_exercise_id)
         .first()
     )
-    if template_exercise is None:
+    if template_exercise is None or template_exercise.workout_template.mesocycle.athlete_id != athlete_id:
         raise TemplateExerciseNotFound(template_exercise_id)
 
     mesocycle = template_exercise.workout_template.mesocycle
@@ -561,13 +585,15 @@ def edit_template_exercise(db: Session, template_exercise_id: int, exercise_id: 
     return template_exercise
 
 
-def add_template_exercise(db: Session, workout_template_id: int, exercise_id: int) -> TemplateExerciseModel:
+def add_template_exercise(
+    db: Session, workout_template_id: int, athlete_id: int, exercise_id: int
+) -> TemplateExerciseModel:
     template = (
         db.query(WorkoutTemplateModel)
         .filter(WorkoutTemplateModel.id == workout_template_id)
         .first()
     )
-    if template is None:
+    if template is None or template.mesocycle.athlete_id != athlete_id:
         raise WorkoutTemplateNotFound(workout_template_id)
 
     _assert_mutable(template.mesocycle)
@@ -585,13 +611,13 @@ def add_template_exercise(db: Session, workout_template_id: int, exercise_id: in
     return template_exercise
 
 
-def remove_template_exercise(db: Session, template_exercise_id: int) -> None:
+def remove_template_exercise(db: Session, template_exercise_id: int, athlete_id: int) -> None:
     template_exercise = (
         db.query(TemplateExerciseModel)
         .filter(TemplateExerciseModel.id == template_exercise_id)
         .first()
     )
-    if template_exercise is None:
+    if template_exercise is None or template_exercise.workout_template.mesocycle.athlete_id != athlete_id:
         raise TemplateExerciseNotFound(template_exercise_id)
 
     template = template_exercise.workout_template
@@ -614,14 +640,14 @@ def remove_template_exercise(db: Session, template_exercise_id: int) -> None:
 
 
 def reorder_template_exercise(
-    db: Session, template_exercise_id: int, new_position: int
+    db: Session, template_exercise_id: int, athlete_id: int, new_position: int
 ) -> list[TemplateExerciseModel]:
     template_exercise = (
         db.query(TemplateExerciseModel)
         .filter(TemplateExerciseModel.id == template_exercise_id)
         .first()
     )
-    if template_exercise is None:
+    if template_exercise is None or template_exercise.workout_template.mesocycle.athlete_id != athlete_id:
         raise TemplateExerciseNotFound(template_exercise_id)
 
     template = template_exercise.workout_template
@@ -657,6 +683,7 @@ class SetPrescriptionInput:
 def add_prescription(
     db: Session,
     template_exercise_id: int,
+    athlete_id: int,
     week_id: int,
     notes: str,
     sets: list[SetPrescriptionInput],
@@ -666,7 +693,7 @@ def add_prescription(
         .filter(TemplateExerciseModel.id == template_exercise_id)
         .first()
     )
-    if template_exercise is None:
+    if template_exercise is None or template_exercise.workout_template.mesocycle.athlete_id != athlete_id:
         raise TemplateExerciseNotFound(template_exercise_id)
     _assert_mutable(template_exercise.workout_template.mesocycle)
     _assert_week_not_trained(db, week_id)
@@ -697,14 +724,14 @@ def add_prescription(
 
 
 def edit_prescription_notes(
-    db: Session, exercise_prescription_id: int, notes: str
+    db: Session, exercise_prescription_id: int, athlete_id: int, notes: str
 ) -> ExercisePrescription:
     prescription = (
         db.query(ExercisePrescriptionModel)
         .filter(ExercisePrescriptionModel.id == exercise_prescription_id)
         .first()
     )
-    if prescription is None:
+    if prescription is None or prescription.template_exercise.workout_template.mesocycle.athlete_id != athlete_id:
         raise ExercisePrescriptionNotFound(exercise_prescription_id)
 
     mesocycle = prescription.template_exercise.workout_template.mesocycle
@@ -717,13 +744,13 @@ def edit_prescription_notes(
     return _prescription_to_domain(prescription)
 
 
-def remove_prescription(db: Session, exercise_prescription_id: int) -> None:
+def remove_prescription(db: Session, exercise_prescription_id: int, athlete_id: int) -> None:
     prescription = (
         db.query(ExercisePrescriptionModel)
         .filter(ExercisePrescriptionModel.id == exercise_prescription_id)
         .first()
     )
-    if prescription is None:
+    if prescription is None or prescription.template_exercise.workout_template.mesocycle.athlete_id != athlete_id:
         raise ExercisePrescriptionNotFound(exercise_prescription_id)
 
     mesocycle = prescription.template_exercise.workout_template.mesocycle
@@ -735,14 +762,14 @@ def remove_prescription(db: Session, exercise_prescription_id: int) -> None:
 
 
 def add_set_to_prescription(
-    db: Session, exercise_prescription_id: int, set_input: SetPrescriptionInput
+    db: Session, exercise_prescription_id: int, athlete_id: int, set_input: SetPrescriptionInput
 ) -> SetPrescriptionModel:
     prescription = (
         db.query(ExercisePrescriptionModel)
         .filter(ExercisePrescriptionModel.id == exercise_prescription_id)
         .first()
     )
-    if prescription is None:
+    if prescription is None or prescription.template_exercise.workout_template.mesocycle.athlete_id != athlete_id:
         raise ExercisePrescriptionNotFound(exercise_prescription_id)
 
     mesocycle = prescription.template_exercise.workout_template.mesocycle
@@ -768,13 +795,17 @@ def add_set_to_prescription(
     return new_set
 
 
-def remove_set_from_prescription(db: Session, set_prescription_id: int) -> None:
+def remove_set_from_prescription(db: Session, set_prescription_id: int, athlete_id: int) -> None:
     set_prescription = (
         db.query(SetPrescriptionModel)
         .filter(SetPrescriptionModel.id == set_prescription_id)
         .first()
     )
-    if set_prescription is None:
+    if (
+        set_prescription is None
+        or set_prescription.exercise_prescription.template_exercise.workout_template.mesocycle.athlete_id
+        != athlete_id
+    ):
         raise SetPrescriptionNotFound(set_prescription_id)
 
     prescription = set_prescription.exercise_prescription
@@ -801,6 +832,7 @@ def remove_set_from_prescription(db: Session, set_prescription_id: int) -> None:
 def edit_set_in_prescription(
     db: Session,
     set_prescription_id: int,
+    athlete_id: int,
     set_type: str | None = None,
     tempo: str | None = None,
     rep_range_min: int | None = None,
@@ -816,7 +848,11 @@ def edit_set_in_prescription(
         .filter(SetPrescriptionModel.id == set_prescription_id)
         .first()
     )
-    if set_prescription is None:
+    if (
+        set_prescription is None
+        or set_prescription.exercise_prescription.template_exercise.workout_template.mesocycle.athlete_id
+        != athlete_id
+    ):
         raise SetPrescriptionNotFound(set_prescription_id)
 
     prescription = set_prescription.exercise_prescription
@@ -867,7 +903,11 @@ def _prescription_to_domain(row: ExercisePrescriptionModel) -> ExercisePrescript
     )
 
 
-def get_week_prescriptions(db: Session, week_id: int) -> list[ExercisePrescription]:
+def get_week_prescriptions(db: Session, week_id: int, athlete_id: int) -> list[ExercisePrescription]:
+    week = db.query(WeekModel).filter(WeekModel.id == week_id).first()
+    if week is None or week.mesocycle.athlete_id != athlete_id:
+        return []
+
     rows = (
         db.query(ExercisePrescriptionModel)
         .options(

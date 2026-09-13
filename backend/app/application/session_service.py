@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session, selectinload
 
 from app.application.mesocycle_service import (
+    MesocycleNotFound,
     current_position,
     get_mesocycle,
     total_required_sessions,
@@ -35,6 +36,9 @@ class SessionAlreadyInProgress(Exception):
 
 
 class SessionNotFound(Exception):
+    """Also raised for a real session/performed-exercise owned by a
+    different athlete — see mesocycle_service's equivalent docstring;
+    same "indistinguishable from doesn't exist" reasoning applies here."""
     pass
 
 
@@ -42,11 +46,13 @@ class InvalidSessionState(Exception):
     pass
 
 
-def start_session(db: Session, mesocycle_id: int) -> WorkoutSessionModel:
+def start_session(db: Session, mesocycle_id: int, athlete_id: int) -> WorkoutSessionModel:
     """Starts a session for whatever current_position() says is next —
     the caller doesn't get to pick, per the fixed-rotation decision."""
-    mesocycle = get_mesocycle(db, mesocycle_id)
-    if mesocycle is None or mesocycle.status != "active":
+    mesocycle = get_mesocycle(db, mesocycle_id, athlete_id)
+    if mesocycle is None:
+        raise MesocycleNotFound(mesocycle_id)
+    if mesocycle.status != "active":
         raise MesocycleNotActive(mesocycle_id)
 
     existing = (
@@ -91,12 +97,21 @@ def start_session(db: Session, mesocycle_id: int) -> WorkoutSessionModel:
 def log_set(
     db: Session,
     performed_exercise_id: int,
+    athlete_id: int,
     set_prescription_id: int | None = None,
     actual_weight: float | None = None,
     actual_reps: float | None = None,
     actual_rpe: float | None = None,
     notes: str | None = None,
 ) -> SetPerformanceModel:
+    performed_exercise = (
+        db.query(PerformedExerciseModel)
+        .filter(PerformedExerciseModel.id == performed_exercise_id)
+        .first()
+    )
+    if performed_exercise is None or performed_exercise.workout_session.mesocycle.athlete_id != athlete_id:
+        raise SessionNotFound(performed_exercise_id)
+
     existing_count = (
         db.query(SetPerformanceModel)
         .filter(SetPerformanceModel.performed_exercise_id == performed_exercise_id)
@@ -118,13 +133,13 @@ def log_set(
     return set_performance
 
 
-def complete_session(db: Session, session_id: int) -> WorkoutSessionModel:
+def complete_session(db: Session, session_id: int, athlete_id: int) -> WorkoutSessionModel:
     workout_session = (
         db.query(WorkoutSessionModel)
         .filter(WorkoutSessionModel.id == session_id)
         .first()
     )
-    if workout_session is None:
+    if workout_session is None or workout_session.mesocycle.athlete_id != athlete_id:
         raise SessionNotFound(session_id)
     if workout_session.status != "in_progress":
         raise InvalidSessionState(workout_session.status)
@@ -144,7 +159,7 @@ def complete_session(db: Session, session_id: int) -> WorkoutSessionModel:
     # consistent with everything else here being session-driven rather
     # than requiring a manual step. A "rest" deload week needs zero
     # sessions, so this can trigger right after the last normal week.
-    full_mesocycle = get_mesocycle(db, mesocycle.id)
+    full_mesocycle = get_mesocycle(db, mesocycle.id, athlete_id)
     if mesocycle.sessions_completed >= total_required_sessions(full_mesocycle):
         mesocycle.status = "completed"
 
@@ -160,7 +175,7 @@ def complete_session(db: Session, session_id: int) -> WorkoutSessionModel:
     return workout_session
 
 
-def abandon_session(db: Session, session_id: int) -> WorkoutSessionModel:
+def abandon_session(db: Session, session_id: int, athlete_id: int) -> WorkoutSessionModel:
     """Does NOT touch sessions_completed — an abandoned session can be
     picked back up later without having consumed its rotation slot."""
     workout_session = (
@@ -168,7 +183,7 @@ def abandon_session(db: Session, session_id: int) -> WorkoutSessionModel:
         .filter(WorkoutSessionModel.id == session_id)
         .first()
     )
-    if workout_session is None:
+    if workout_session is None or workout_session.mesocycle.athlete_id != athlete_id:
         raise SessionNotFound(session_id)
     if workout_session.status != "in_progress":
         raise InvalidSessionState(workout_session.status)
@@ -179,8 +194,8 @@ def abandon_session(db: Session, session_id: int) -> WorkoutSessionModel:
     return workout_session
 
 
-def get_session(db: Session, session_id: int) -> WorkoutSessionModel | None:
-    return (
+def get_session(db: Session, session_id: int, athlete_id: int) -> WorkoutSessionModel | None:
+    session = (
         db.query(WorkoutSessionModel)
         .options(
             selectinload(WorkoutSessionModel.week),
@@ -192,6 +207,9 @@ def get_session(db: Session, session_id: int) -> WorkoutSessionModel | None:
         .filter(WorkoutSessionModel.id == session_id)
         .first()
     )
+    if session is None or session.mesocycle.athlete_id != athlete_id:
+        return None
+    return session
 
 
 def get_prescription_for(
@@ -199,7 +217,9 @@ def get_prescription_for(
 ) -> ExercisePrescriptionModel | None:
     """Looks up the plan for a given slot+week, so the API layer can show
     prescribed sets alongside performed sets — the actual expected-vs-actual
-    comparison."""
+    comparison. No separate ownership check here: every caller only
+    reaches this after get_session has already verified the session (and
+    therefore this slot+week) belongs to the current athlete."""
     return (
         db.query(ExercisePrescriptionModel)
         .options(

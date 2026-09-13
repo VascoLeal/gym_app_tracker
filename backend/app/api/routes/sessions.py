@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import get_current_athlete
 from app.api.schemas import (
     LogSetRequest,
     PerformedExerciseResponse,
@@ -21,7 +22,9 @@ from app.application.session_service import (
     log_set,
     start_session,
 )
+from app.application.mesocycle_service import MesocycleNotFound
 from app.infrastructure.database import get_db
+from app.infrastructure.models import AthleteModel
 from app.infrastructure.session_models import WorkoutSessionModel
 
 router = APIRouter(tags=["sessions"])
@@ -77,10 +80,16 @@ def _session_to_response(db: Session, ws: WorkoutSessionModel) -> WorkoutSession
     status_code=status.HTTP_201_CREATED,
 )
 def start_session_route(
-    mesocycle_id: int, db: Session = Depends(get_db)
+    mesocycle_id: int,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> WorkoutSessionResponse:
     try:
-        workout_session = start_session(db, mesocycle_id)
+        workout_session = start_session(db, mesocycle_id, current_athlete.id)
+    except MesocycleNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Mesocycle not found."
+        ) from exc
     except MesocycleNotActive as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -102,9 +111,11 @@ def start_session_route(
 
 @router.get("/workout-sessions/{session_id}", response_model=WorkoutSessionResponse)
 def get_session_route(
-    session_id: int, db: Session = Depends(get_db)
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> WorkoutSessionResponse:
-    workout_session = get_session(db, session_id)
+    workout_session = get_session(db, session_id, current_athlete.id)
     if workout_session is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Session not found."
@@ -118,17 +129,26 @@ def get_session_route(
     status_code=status.HTTP_201_CREATED,
 )
 def log_set_route(
-    performed_exercise_id: int, body: LogSetRequest, db: Session = Depends(get_db)
+    performed_exercise_id: int,
+    body: LogSetRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> SetPerformanceResponse:
-    s = log_set(
-        db,
-        performed_exercise_id=performed_exercise_id,
-        set_prescription_id=body.set_prescription_id,
-        actual_weight=body.actual_weight,
-        actual_reps=body.actual_reps,
-        actual_rpe=body.actual_rpe,
-        notes=body.notes,
-    )
+    try:
+        s = log_set(
+            db,
+            performed_exercise_id=performed_exercise_id,
+            athlete_id=current_athlete.id,
+            set_prescription_id=body.set_prescription_id,
+            actual_weight=body.actual_weight,
+            actual_reps=body.actual_reps,
+            actual_rpe=body.actual_rpe,
+            notes=body.notes,
+        )
+    except SessionNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Exercise not found in this session."
+        ) from exc
     return SetPerformanceResponse(
         id=s.id, set_prescription_id=s.set_prescription_id, set_number=s.set_number,
         actual_weight=s.actual_weight, actual_reps=s.actual_reps, actual_rpe=s.actual_rpe,
@@ -138,10 +158,12 @@ def log_set_route(
 
 @router.post("/workout-sessions/{session_id}/complete", response_model=WorkoutSessionResponse)
 def complete_session_route(
-    session_id: int, db: Session = Depends(get_db)
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> WorkoutSessionResponse:
     try:
-        workout_session = complete_session(db, session_id)
+        workout_session = complete_session(db, session_id, current_athlete.id)
     except SessionNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Session not found."
@@ -156,10 +178,12 @@ def complete_session_route(
 
 @router.post("/workout-sessions/{session_id}/abandon", response_model=WorkoutSessionResponse)
 def abandon_session_route(
-    session_id: int, db: Session = Depends(get_db)
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> WorkoutSessionResponse:
     try:
-        workout_session = abandon_session(db, session_id)
+        workout_session = abandon_session(db, session_id, current_athlete.id)
     except SessionNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Session not found."

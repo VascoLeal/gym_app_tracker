@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import get_current_athlete
 from app.api.schemas import (
     AddSetRequest,
     AddTemplateExerciseRequest,
@@ -65,6 +66,7 @@ from app.application.mesocycle_service import (
 )
 from app.infrastructure.database import get_db
 from app.infrastructure.mesocycle_models import MesocycleModel
+from app.infrastructure.models import AthleteModel
 
 router = APIRouter(tags=["mesocycles"])
 
@@ -134,6 +136,10 @@ def _exercise_prescription_response(prescription) -> ExercisePrescriptionRespons
     )
 
 
+_LOCKED_DETAIL = "This mesocycle is completed/abandoned and can't be edited."
+_WEEK_TRAINED_DETAIL = "A session has already been completed for this week — its plan is locked."
+
+
 # --- Mesocycle lifecycle ---
 
 
@@ -141,16 +147,18 @@ def _exercise_prescription_response(prescription) -> ExercisePrescriptionRespons
     "/mesocycles", response_model=MesocycleResponse, status_code=status.HTTP_201_CREATED
 )
 def create_mesocycle_route(
-    body: MesocycleCreateRequest, db: Session = Depends(get_db)
+    body: MesocycleCreateRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> MesocycleResponse:
-    """Creates a DRAFT mesocycle — not active. Call POST .../start when
-    ready to actually begin training it. An athlete can have as many
-    drafts as they like; only one ACTIVE mesocycle is enforced, and only
-    at start time."""
+    """Creates a DRAFT mesocycle for the logged-in athlete — not active.
+    Call POST .../start when ready to actually begin training it. Any
+    number of drafts is fine; only one ACTIVE mesocycle is enforced, and
+    only at start time."""
     try:
         mesocycle = create_mesocycle(
             db,
-            athlete_id=body.athlete_id,
+            athlete_id=current_athlete.id,
             name=body.name,
             number_of_weeks=body.number_of_weeks,
             deload_strategy_name=body.deload_strategy,
@@ -170,10 +178,12 @@ def create_mesocycle_route(
 
 @router.post("/mesocycles/{mesocycle_id}/start", response_model=MesocycleResponse)
 def start_mesocycle_route(
-    mesocycle_id: int, db: Session = Depends(get_db)
+    mesocycle_id: int,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> MesocycleResponse:
     try:
-        mesocycle = start_mesocycle(db, mesocycle_id)
+        mesocycle = start_mesocycle(db, mesocycle_id, current_athlete.id)
     except MesocycleNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Mesocycle not found."
@@ -194,22 +204,22 @@ def start_mesocycle_route(
 
 @router.patch("/mesocycles/{mesocycle_id}", response_model=MesocycleResponse)
 def edit_mesocycle_route(
-    mesocycle_id: int, body: MesocycleEditRequest, db: Session = Depends(get_db)
+    mesocycle_id: int,
+    body: MesocycleEditRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> MesocycleResponse:
     try:
         mesocycle = edit_mesocycle(
-            db, mesocycle_id, name=body.name, number_of_weeks=body.number_of_weeks,
-            deload_strategy_name=body.deload_strategy,
+            db, mesocycle_id, current_athlete.id, name=body.name,
+            number_of_weeks=body.number_of_weeks, deload_strategy_name=body.deload_strategy,
         )
     except MesocycleNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Mesocycle not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except MesocycleAlreadyStarted as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -225,9 +235,11 @@ def edit_mesocycle_route(
 
 @router.get("/mesocycles/{mesocycle_id}", response_model=MesocycleResponse)
 def get_mesocycle_route(
-    mesocycle_id: int, db: Session = Depends(get_db)
+    mesocycle_id: int,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> MesocycleResponse:
-    mesocycle = get_mesocycle(db, mesocycle_id)
+    mesocycle = get_mesocycle(db, mesocycle_id, current_athlete.id)
     if mesocycle is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Mesocycle not found."
@@ -235,20 +247,27 @@ def get_mesocycle_route(
     return _mesocycle_to_response(mesocycle)
 
 
-@router.get("/athletes/{athlete_id}/mesocycles", response_model=list[MesocycleResponse])
-def list_athlete_mesocycles_route(
-    athlete_id: int, db: Session = Depends(get_db)
+@router.get("/me/mesocycles", response_model=list[MesocycleResponse])
+def list_my_mesocycles_route(
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> list[MesocycleResponse]:
-    mesocycles = list_athlete_mesocycles(db, athlete_id)
+    """No athlete_id in the URL — this always means "mine." There's no
+    coach/admin view of someone else's mesocycles yet (that's the deferred
+    Future Capabilities item), so there's nothing else it could mean."""
+    mesocycles = list_athlete_mesocycles(db, current_athlete.id)
     return [_mesocycle_to_response(m) for m in mesocycles]
 
 
 @router.post("/mesocycles/{mesocycle_id}/stop", status_code=status.HTTP_204_NO_CONTENT)
 def stop_mesocycle_route(
-    mesocycle_id: int, body: MesocycleStopRequest, db: Session = Depends(get_db)
+    mesocycle_id: int,
+    body: MesocycleStopRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> None:
     try:
-        stop_mesocycle(db, mesocycle_id, keep_as_history=body.keep_as_history)
+        stop_mesocycle(db, mesocycle_id, current_athlete.id, keep_as_history=body.keep_as_history)
     except MesocycleNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Mesocycle not found."
@@ -266,11 +285,14 @@ def stop_mesocycle_route(
     status_code=status.HTTP_201_CREATED,
 )
 def copy_mesocycle_route(
-    mesocycle_id: int, body: MesocycleCopyRequest, db: Session = Depends(get_db)
+    mesocycle_id: int,
+    body: MesocycleCopyRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> MesocycleResponse:
     """Copy always produces a DRAFT — start it separately when ready."""
     try:
-        new_mesocycle = copy_mesocycle(db, mesocycle_id, body.new_name)
+        new_mesocycle = copy_mesocycle(db, mesocycle_id, current_athlete.id, body.new_name)
     except MesocycleNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Mesocycle not found."
@@ -279,9 +301,13 @@ def copy_mesocycle_route(
 
 
 @router.delete("/mesocycles/{mesocycle_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_mesocycle_route(mesocycle_id: int, db: Session = Depends(get_db)) -> None:
+def delete_mesocycle_route(
+    mesocycle_id: int,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
+) -> None:
     try:
-        delete_mesocycle(db, mesocycle_id)
+        delete_mesocycle(db, mesocycle_id, current_athlete.id)
     except MesocycleNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Mesocycle not found."
@@ -302,21 +328,22 @@ def delete_mesocycle_route(mesocycle_id: int, db: Session = Depends(get_db)) -> 
     status_code=status.HTTP_201_CREATED,
 )
 def add_workout_template_route(
-    mesocycle_id: int, body: AddWorkoutTemplateRequest, db: Session = Depends(get_db)
+    mesocycle_id: int,
+    body: AddWorkoutTemplateRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> WorkoutTemplateResponse:
     try:
         template = add_workout_template(
-            db, mesocycle_id, body.name, body.order_in_split, body.exercise_ids
+            db, mesocycle_id, current_athlete.id, body.name, body.order_in_split,
+            body.exercise_ids,
         )
     except MesocycleNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Mesocycle not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except MesocycleAlreadyStarted as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -330,19 +357,19 @@ def add_workout_template_route(
 
 @router.patch("/workout-templates/{workout_template_id}", response_model=WorkoutTemplateResponse)
 def edit_workout_template_route(
-    workout_template_id: int, body: EditWorkoutTemplateRequest, db: Session = Depends(get_db)
+    workout_template_id: int,
+    body: EditWorkoutTemplateRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> WorkoutTemplateResponse:
     try:
-        template = edit_workout_template(db, workout_template_id, body.name)
+        template = edit_workout_template(db, workout_template_id, current_athlete.id, body.name)
     except WorkoutTemplateNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Workout template not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     return WorkoutTemplateResponse(
         id=template.id, name=template.name, order_in_split=template.order_in_split,
         exercises=[_template_exercise_response(te) for te in template.exercises],
@@ -354,19 +381,21 @@ def edit_workout_template_route(
     response_model=list[WorkoutTemplateResponse],
 )
 def reorder_workout_template_route(
-    workout_template_id: int, body: ReorderWorkoutTemplateRequest, db: Session = Depends(get_db)
+    workout_template_id: int,
+    body: ReorderWorkoutTemplateRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> list[WorkoutTemplateResponse]:
     try:
-        templates = reorder_workout_template(db, workout_template_id, body.new_position)
+        templates = reorder_workout_template(
+            db, workout_template_id, current_athlete.id, body.new_position
+        )
     except WorkoutTemplateNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Workout template not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except MesocycleAlreadyStarted as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -386,19 +415,18 @@ def reorder_workout_template_route(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def remove_workout_template_route(
-    workout_template_id: int, db: Session = Depends(get_db)
+    workout_template_id: int,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> None:
     try:
-        remove_workout_template(db, workout_template_id)
+        remove_workout_template(db, workout_template_id, current_athlete.id)
     except WorkoutTemplateNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Workout template not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except MesocycleAlreadyStarted as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -411,19 +439,21 @@ def remove_workout_template_route(
 
 @router.patch("/template-exercises/{template_exercise_id}", response_model=TemplateExerciseResponse)
 def edit_template_exercise_route(
-    template_exercise_id: int, body: EditTemplateExerciseRequest, db: Session = Depends(get_db)
+    template_exercise_id: int,
+    body: EditTemplateExerciseRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> TemplateExerciseResponse:
     try:
-        te = edit_template_exercise(db, template_exercise_id, body.exercise_id)
+        te = edit_template_exercise(
+            db, template_exercise_id, current_athlete.id, body.exercise_id
+        )
     except TemplateExerciseNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Exercise slot not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except MesocycleAlreadyStarted as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -439,19 +469,19 @@ def edit_template_exercise_route(
     status_code=status.HTTP_201_CREATED,
 )
 def add_template_exercise_route(
-    workout_template_id: int, body: AddTemplateExerciseRequest, db: Session = Depends(get_db)
+    workout_template_id: int,
+    body: AddTemplateExerciseRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> TemplateExerciseResponse:
     try:
-        te = add_template_exercise(db, workout_template_id, body.exercise_id)
+        te = add_template_exercise(db, workout_template_id, current_athlete.id, body.exercise_id)
     except WorkoutTemplateNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Workout template not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except MesocycleAlreadyStarted as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -465,19 +495,21 @@ def add_template_exercise_route(
     response_model=list[TemplateExerciseResponse],
 )
 def reorder_template_exercise_route(
-    template_exercise_id: int, body: ReorderTemplateExerciseRequest, db: Session = Depends(get_db)
+    template_exercise_id: int,
+    body: ReorderTemplateExerciseRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> list[TemplateExerciseResponse]:
     try:
-        exercises = reorder_template_exercise(db, template_exercise_id, body.new_position)
+        exercises = reorder_template_exercise(
+            db, template_exercise_id, current_athlete.id, body.new_position
+        )
     except TemplateExerciseNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Exercise slot not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except MesocycleAlreadyStarted as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -491,19 +523,18 @@ def reorder_template_exercise_route(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def remove_template_exercise_route(
-    template_exercise_id: int, db: Session = Depends(get_db)
+    template_exercise_id: int,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> None:
     try:
-        remove_template_exercise(db, template_exercise_id)
+        remove_template_exercise(db, template_exercise_id, current_athlete.id)
     except TemplateExerciseNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Exercise slot not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except MesocycleAlreadyStarted as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -523,11 +554,13 @@ def add_prescription_route(
     template_exercise_id: int,
     body: PrescriptionCreateRequest,
     db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> ExercisePrescriptionResponse:
     try:
         prescription = add_prescription(
             db,
             template_exercise_id=template_exercise_id,
+            athlete_id=current_athlete.id,
             week_id=body.week_id,
             notes=body.notes,
             sets=[
@@ -542,14 +575,10 @@ def add_prescription_route(
             status_code=status.HTTP_404_NOT_FOUND, detail="Exercise slot not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except WeekAlreadyTrained as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A session has already been completed for this week — its plan is locked.",
+            status_code=status.HTTP_409_CONFLICT, detail=_WEEK_TRAINED_DETAIL
         ) from exc
     return ExercisePrescriptionResponse(
         id=prescription.id,
@@ -573,23 +602,24 @@ def add_prescription_route(
     response_model=ExercisePrescriptionResponse,
 )
 def edit_prescription_notes_route(
-    exercise_prescription_id: int, body: EditPrescriptionNotesRequest, db: Session = Depends(get_db)
+    exercise_prescription_id: int,
+    body: EditPrescriptionNotesRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> ExercisePrescriptionResponse:
     try:
-        prescription = edit_prescription_notes(db, exercise_prescription_id, body.notes)
+        prescription = edit_prescription_notes(
+            db, exercise_prescription_id, current_athlete.id, body.notes
+        )
     except ExercisePrescriptionNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Exercise prescription not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except WeekAlreadyTrained as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A session has already been completed for this week — its plan is locked.",
+            status_code=status.HTTP_409_CONFLICT, detail=_WEEK_TRAINED_DETAIL
         ) from exc
     return ExercisePrescriptionResponse(
         id=prescription.id, template_exercise_id=prescription.template_exercise_id,
@@ -610,23 +640,21 @@ def edit_prescription_notes_route(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 def remove_prescription_route(
-    exercise_prescription_id: int, db: Session = Depends(get_db)
+    exercise_prescription_id: int,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> None:
     try:
-        remove_prescription(db, exercise_prescription_id)
+        remove_prescription(db, exercise_prescription_id, current_athlete.id)
     except ExercisePrescriptionNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Exercise prescription not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except WeekAlreadyTrained as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A session has already been completed for this week — its plan is locked.",
+            status_code=status.HTTP_409_CONFLICT, detail=_WEEK_TRAINED_DETAIL
         ) from exc
 
 
@@ -636,11 +664,14 @@ def remove_prescription_route(
     status_code=status.HTTP_201_CREATED,
 )
 def add_set_route(
-    exercise_prescription_id: int, body: AddSetRequest, db: Session = Depends(get_db)
+    exercise_prescription_id: int,
+    body: AddSetRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> SetPrescriptionResponse:
     try:
         sp = add_set_to_prescription(
-            db, exercise_prescription_id,
+            db, exercise_prescription_id, current_athlete.id,
             SetPrescriptionInput(
                 body.set_type, body.tempo, body.rep_range_min, body.rep_range_max,
                 body.target_weight,
@@ -651,25 +682,24 @@ def add_set_route(
             status_code=status.HTTP_404_NOT_FOUND, detail="Exercise prescription not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except WeekAlreadyTrained as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A session has already been completed for this week — its plan is locked.",
+            status_code=status.HTTP_409_CONFLICT, detail=_WEEK_TRAINED_DETAIL
         ) from exc
     return _set_prescription_response(sp, target_rpe=None)
 
 
 @router.patch("/set-prescriptions/{set_prescription_id}", response_model=SetPrescriptionResponse)
 def edit_set_route(
-    set_prescription_id: int, body: EditSetRequest, db: Session = Depends(get_db)
+    set_prescription_id: int,
+    body: EditSetRequest,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> SetPrescriptionResponse:
     try:
         sp = edit_set_in_prescription(
-            db, set_prescription_id,
+            db, set_prescription_id, current_athlete.id,
             set_type=body.set_type, tempo=body.tempo,
             rep_range_min=body.rep_range_min, rep_range_max=body.rep_range_max,
             target_weight=body.target_weight, clear_target_weight=body.clear_target_weight,
@@ -679,14 +709,10 @@ def edit_set_route(
             status_code=status.HTTP_404_NOT_FOUND, detail="Set not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except WeekAlreadyTrained as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A session has already been completed for this week — its plan is locked.",
+            status_code=status.HTTP_409_CONFLICT, detail=_WEEK_TRAINED_DETAIL
         ) from exc
     target_rpe = sp.exercise_prescription.week.target_rpe
     return _set_prescription_response(sp, target_rpe)
@@ -696,22 +722,22 @@ def edit_set_route(
     "/set-prescriptions/{set_prescription_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def remove_set_route(set_prescription_id: int, db: Session = Depends(get_db)) -> None:
+def remove_set_route(
+    set_prescription_id: int,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
+) -> None:
     try:
-        remove_set_from_prescription(db, set_prescription_id)
+        remove_set_from_prescription(db, set_prescription_id, current_athlete.id)
     except SetPrescriptionNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Set not found."
         ) from exc
     except MesocycleLocked as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This mesocycle is completed/abandoned and can't be edited.",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_LOCKED_DETAIL) from exc
     except WeekAlreadyTrained as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A session has already been completed for this week — its plan is locked.",
+            status_code=status.HTTP_409_CONFLICT, detail=_WEEK_TRAINED_DETAIL
         ) from exc
 
 
@@ -720,9 +746,11 @@ def remove_set_route(set_prescription_id: int, db: Session = Depends(get_db)) ->
     response_model=list[ExercisePrescriptionResponse],
 )
 def list_week_prescriptions_route(
-    week_id: int, db: Session = Depends(get_db)
+    week_id: int,
+    db: Session = Depends(get_db),
+    current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> list[ExercisePrescriptionResponse]:
-    prescriptions = get_week_prescriptions(db, week_id)
+    prescriptions = get_week_prescriptions(db, week_id, current_athlete.id)
     return [
         ExercisePrescriptionResponse(
             id=p.id, template_exercise_id=p.template_exercise_id, week_id=p.week_id,

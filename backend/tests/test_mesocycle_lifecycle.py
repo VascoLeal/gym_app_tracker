@@ -39,11 +39,18 @@ def client():
 
 @pytest.fixture()
 def athlete_id(client):
-    response = client.post(
+    client.post(
         "/auth/register",
         json={"email": "lifter@example.com", "password": "correct-horse-battery"},
     )
-    return response.json()["id"]
+    login = client.post(
+        "/auth/login",
+        json={"email": "lifter@example.com", "password": "correct-horse-battery"},
+    ).json()
+    # Every subsequent request through this client now carries the token —
+    # individual tests don't need to attach it themselves.
+    client.headers["Authorization"] = f"Bearer {login['access_token']}"
+    return login["athlete"]["id"]
 
 
 @pytest.fixture()
@@ -53,7 +60,6 @@ def exercise_ids(client):
 
 def _mesocycle_payload(athlete_id, exercise_ids, weeks=4, name="Block 1"):
     return {
-        "athlete_id": athlete_id,
         "name": name,
         "number_of_weeks": weeks,
         "deload_strategy": "reduced_load",
@@ -116,7 +122,7 @@ def test_can_create_multiple_drafts_while_one_is_active(client, athlete_id, exer
     assert second.json()["status"] == "draft"
     assert third.json()["status"] == "draft"
 
-    all_mesocycles = client.get(f"/athletes/{athlete_id}/mesocycles").json()
+    all_mesocycles = client.get("/me/mesocycles").json()
     assert len(all_mesocycles) == 3
 
 
@@ -164,7 +170,7 @@ def test_stop_and_keep_as_history_then_start_new_one(client, athlete_id, exercis
     start_response = client.post(f"/mesocycles/{second['id']}/start")
     assert start_response.status_code == 200
 
-    history = client.get(f"/athletes/{athlete_id}/mesocycles").json()
+    history = client.get("/me/mesocycles").json()
     assert len(history) == 2
     stopped = next(m for m in history if m["id"] == first["id"])
     assert stopped["status"] == "abandoned"
@@ -179,7 +185,7 @@ def test_stop_without_keeping_history_deletes_it(client, athlete_id, exercise_id
     client.post(f"/mesocycles/{first['id']}/stop", json={"keep_as_history": False})
 
     assert client.get(f"/mesocycles/{first['id']}").status_code == 404
-    history = client.get(f"/athletes/{athlete_id}/mesocycles").json()
+    history = client.get("/me/mesocycles").json()
     assert history == []
 
 
