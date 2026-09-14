@@ -54,7 +54,7 @@ class WeekModel(Base):
     __table_args__ = (UniqueConstraint("mesocycle_id", "week_number"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    mesocycle_id: Mapped[int] = mapped_column(ForeignKey("mesocycles.id"))
+    mesocycle_id: Mapped[int] = mapped_column(ForeignKey("mesocycles.id", ondelete="CASCADE"))
     week_number: Mapped[int] = mapped_column(Integer)
     is_deload: Mapped[bool] = mapped_column(default=False)
     target_rpe: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -66,7 +66,7 @@ class WorkoutTemplateModel(Base):
     __tablename__ = "workout_templates"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    mesocycle_id: Mapped[int] = mapped_column(ForeignKey("mesocycles.id"))
+    mesocycle_id: Mapped[int] = mapped_column(ForeignKey("mesocycles.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(200))
     order_in_split: Mapped[int] = mapped_column(Integer)
 
@@ -84,7 +84,7 @@ class TemplateExerciseModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     workout_template_id: Mapped[int] = mapped_column(
-        ForeignKey("workout_templates.id")
+        ForeignKey("workout_templates.id", ondelete="CASCADE")
     )
     exercise_id: Mapped[int] = mapped_column(ForeignKey("exercises.id"))
     order_in_workout: Mapped[int] = mapped_column(Integer)
@@ -101,9 +101,9 @@ class ExercisePrescriptionModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     template_exercise_id: Mapped[int] = mapped_column(
-        ForeignKey("template_exercises.id")
+        ForeignKey("template_exercises.id", ondelete="CASCADE")
     )
-    week_id: Mapped[int] = mapped_column(ForeignKey("weeks.id"))
+    week_id: Mapped[int] = mapped_column(ForeignKey("weeks.id", ondelete="CASCADE"))
     notes: Mapped[str] = mapped_column(Text, default="")
 
     template_exercise: Mapped[TemplateExerciseModel] = relationship()
@@ -120,7 +120,7 @@ class SetPrescriptionModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     exercise_prescription_id: Mapped[int] = mapped_column(
-        ForeignKey("exercise_prescriptions.id")
+        ForeignKey("exercise_prescriptions.id", ondelete="CASCADE")
     )
     set_number: Mapped[int] = mapped_column(Integer)
     set_type_id: Mapped[int] = mapped_column(ForeignKey("set_types.id"))

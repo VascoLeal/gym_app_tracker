@@ -67,11 +67,26 @@ from app.application.mesocycle_service import (
 from app.infrastructure.database import get_db
 from app.infrastructure.mesocycle_models import MesocycleModel
 from app.infrastructure.models import AthleteModel
+from app.infrastructure.session_models import WorkoutSessionModel
 
 router = APIRouter(tags=["mesocycles"])
 
 
-def _mesocycle_to_response(m: MesocycleModel) -> MesocycleResponse:
+def _in_progress_session_id(db: Session, mesocycle_id: int) -> int | None:
+    """Lets the frontend show "Start" vs "Continue Workout" without trying
+    to start a session and parsing a 409's error string."""
+    session = (
+        db.query(WorkoutSessionModel)
+        .filter(
+            WorkoutSessionModel.mesocycle_id == mesocycle_id,
+            WorkoutSessionModel.status == "in_progress",
+        )
+        .first()
+    )
+    return session.id if session else None
+
+
+def _mesocycle_to_response(db: Session, m: MesocycleModel) -> MesocycleResponse:
     week_number, next_template = current_position(m)
     return MesocycleResponse(
         id=m.id,
@@ -83,6 +98,7 @@ def _mesocycle_to_response(m: MesocycleModel) -> MesocycleResponse:
         sessions_completed=m.sessions_completed,
         current_week_number=week_number,
         next_workout_template_id=next_template.id if next_template else None,
+        in_progress_session_id=_in_progress_session_id(db, m.id),
         weeks=[
             WeekResponse(
                 id=w.id, week_number=w.week_number, is_deload=w.is_deload,
@@ -173,7 +189,7 @@ def create_mesocycle_route(
             detail="Mesocycle length must be between 4 and 12 weeks.",
         ) from exc
 
-    return _mesocycle_to_response(mesocycle)
+    return _mesocycle_to_response(db, mesocycle)
 
 
 @router.post("/mesocycles/{mesocycle_id}/start", response_model=MesocycleResponse)
@@ -199,7 +215,7 @@ def start_mesocycle_route(
             detail=f"Athlete already has an active mesocycle (id={exc.args[0]}). "
                    "Stop it before starting this one.",
         ) from exc
-    return _mesocycle_to_response(mesocycle)
+    return _mesocycle_to_response(db, mesocycle)
 
 
 @router.patch("/mesocycles/{mesocycle_id}", response_model=MesocycleResponse)
@@ -230,7 +246,7 @@ def edit_mesocycle_route(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Mesocycle length must be between 4 and 12 weeks.",
         ) from exc
-    return _mesocycle_to_response(mesocycle)
+    return _mesocycle_to_response(db, mesocycle)
 
 
 @router.get("/mesocycles/{mesocycle_id}", response_model=MesocycleResponse)
@@ -244,7 +260,7 @@ def get_mesocycle_route(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Mesocycle not found."
         )
-    return _mesocycle_to_response(mesocycle)
+    return _mesocycle_to_response(db, mesocycle)
 
 
 @router.get("/me/mesocycles", response_model=list[MesocycleResponse])
@@ -256,7 +272,7 @@ def list_my_mesocycles_route(
     coach/admin view of someone else's mesocycles yet (that's the deferred
     Future Capabilities item), so there's nothing else it could mean."""
     mesocycles = list_athlete_mesocycles(db, current_athlete.id)
-    return [_mesocycle_to_response(m) for m in mesocycles]
+    return [_mesocycle_to_response(db, m) for m in mesocycles]
 
 
 @router.post("/mesocycles/{mesocycle_id}/stop", status_code=status.HTTP_204_NO_CONTENT)
@@ -297,7 +313,7 @@ def copy_mesocycle_route(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Mesocycle not found."
         ) from exc
-    return _mesocycle_to_response(new_mesocycle)
+    return _mesocycle_to_response(db, new_mesocycle)
 
 
 @router.delete("/mesocycles/{mesocycle_id}", status_code=status.HTTP_204_NO_CONTENT)

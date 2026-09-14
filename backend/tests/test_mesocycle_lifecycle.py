@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -15,6 +15,15 @@ def client():
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
+    )
+    # SQLite ignores foreign keys (including ON DELETE CASCADE/SET NULL)
+    # unless told otherwise per-connection — without this, the cascade
+    # fix for stop_mesocycle's delete path couldn't actually be exercised
+    # here, since SQLite would just silently allow the dangling deletes
+    # Postgres correctly rejects.
+    event.listen(
+        engine, "connect",
+        lambda dbapi_conn, _: dbapi_conn.execute("PRAGMA foreign_keys=ON"),
     )
     Base.metadata.create_all(engine)
     TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -187,6 +196,47 @@ def test_stop_without_keeping_history_deletes_it(client, athlete_id, exercise_id
     assert client.get(f"/mesocycles/{first['id']}").status_code == 404
     history = client.get("/me/mesocycles").json()
     assert history == []
+
+
+def test_stop_without_keeping_history_deletes_it_with_prescriptions_and_a_session(
+    client, athlete_id, exercise_ids
+):
+    """Regression test: deleting a mesocycle used to 500 with a
+    ForeignKeyViolation the instant it had any exercise_prescriptions or
+    workout_sessions, because neither had an ON DELETE action and the ORM
+    had no relationship declared in that direction to cascade through
+    itself. Exercises both paths at once: a prescription on week 1, plus
+    an in-progress session with a set already logged against it."""
+    first = client.post(
+        "/mesocycles", json=_mesocycle_payload(athlete_id, exercise_ids)
+    ).json()
+    first = client.post(f"/mesocycles/{first['id']}/start").json()
+
+    week_1_id = first["weeks"][0]["id"]
+    template_exercise_id = first["workout_templates"][0]["exercises"][0]["id"]
+    prescription = client.post(
+        f"/template-exercises/{template_exercise_id}/prescriptions",
+        json={
+            "week_id": week_1_id, "notes": "",
+            "sets": [{"set_type": "straight_set", "tempo": "normal",
+                      "rep_range_min": 8, "rep_range_max": 12}],
+        },
+    )
+    assert prescription.status_code == 201
+
+    session = client.post(f"/mesocycles/{first['id']}/sessions/start").json()
+    performed_exercise_id = session["performed_exercises"][0]["id"]
+    log_response = client.post(
+        f"/performed-exercises/{performed_exercise_id}/sets",
+        json={"actual_weight": 60, "actual_reps": 10, "actual_rpe": 8},
+    )
+    assert log_response.status_code == 201
+
+    stop_response = client.post(
+        f"/mesocycles/{first['id']}/stop", json={"keep_as_history": False}
+    )
+    assert stop_response.status_code == 204
+    assert client.get(f"/mesocycles/{first['id']}").status_code == 404
 
 
 def test_copy_mesocycle_produces_a_draft_not_active(

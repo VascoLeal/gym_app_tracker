@@ -24,9 +24,11 @@ class WorkoutSessionModel(Base):
     __tablename__ = "workout_sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    mesocycle_id: Mapped[int] = mapped_column(ForeignKey("mesocycles.id"))
-    week_id: Mapped[int] = mapped_column(ForeignKey("weeks.id"))
-    workout_template_id: Mapped[int] = mapped_column(ForeignKey("workout_templates.id"))
+    mesocycle_id: Mapped[int] = mapped_column(ForeignKey("mesocycles.id", ondelete="CASCADE"))
+    week_id: Mapped[int] = mapped_column(ForeignKey("weeks.id", ondelete="CASCADE"))
+    workout_template_id: Mapped[int] = mapped_column(
+        ForeignKey("workout_templates.id", ondelete="CASCADE")
+    )
     status: Mapped[str] = mapped_column(String(20), default="in_progress")
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -48,10 +50,15 @@ class PerformedExerciseModel(Base):
     __tablename__ = "performed_exercises"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    workout_session_id: Mapped[int] = mapped_column(ForeignKey("workout_sessions.id"))
-    # Nullable: an exercise added on the fly with no corresponding plan slot.
+    workout_session_id: Mapped[int] = mapped_column(
+        ForeignKey("workout_sessions.id", ondelete="CASCADE")
+    )
+    # Nullable: an exercise added on the fly with no corresponding plan slot
+    # — and, symmetrically, what this degrades to if the plan slot it
+    # pointed at is later removed. Historical performance data outlives the
+    # plan, so this is SET NULL rather than CASCADE.
     template_exercise_id: Mapped[int | None] = mapped_column(
-        ForeignKey("template_exercises.id"), nullable=True
+        ForeignKey("template_exercises.id", ondelete="SET NULL"), nullable=True
     )
     # The exercise ACTUALLY performed — may differ from the template
     # slot's planned exercise (a swap), which is why this is its own FK
@@ -75,11 +82,14 @@ class SetPerformanceModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     performed_exercise_id: Mapped[int] = mapped_column(
-        ForeignKey("performed_exercises.id")
+        ForeignKey("performed_exercises.id", ondelete="CASCADE")
     )
-    # Nullable: an added set with no prescription behind it.
+    # Nullable: an added set with no prescription behind it — and what this
+    # degrades to if the prescription it logged against is later edited
+    # away. Same "historical performance outlives the plan" reasoning as
+    # PerformedExercise.template_exercise_id above.
     set_prescription_id: Mapped[int | None] = mapped_column(
-        ForeignKey("set_prescriptions.id"), nullable=True
+        ForeignKey("set_prescriptions.id", ondelete="SET NULL"), nullable=True
     )
     set_number: Mapped[int] = mapped_column(Integer)
     actual_weight: Mapped[float | None] = mapped_column(Float, nullable=True)

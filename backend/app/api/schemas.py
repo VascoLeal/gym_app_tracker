@@ -158,6 +158,7 @@ class MesocycleResponse(BaseModel):
     sessions_completed: int
     current_week_number: int
     next_workout_template_id: int | None
+    in_progress_session_id: int | None
     weeks: list[WeekResponse]
     workout_templates: list[WorkoutTemplateResponse]
 
