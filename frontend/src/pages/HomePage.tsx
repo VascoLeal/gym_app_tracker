@@ -4,7 +4,36 @@ import { ApiError } from "../api/client";
 import { listMyMesocycles, type Mesocycle } from "../api/mesocycles";
 import { startSession } from "../api/sessions";
 
-export function HomePage({ onOpenSession }: { onOpenSession: (sessionId: number) => void }) {
+function DraftCard({
+  mesocycle,
+  onEdit,
+}: {
+  mesocycle: Mesocycle;
+  onEdit: (mesocycleId: number) => void;
+}) {
+  return (
+    <div className="mesocycle-card">
+      <h2>{mesocycle.name}</h2>
+      <p>
+        Draft — {mesocycle.number_of_weeks} weeks, {mesocycle.workout_templates.length} training
+        day{mesocycle.workout_templates.length === 1 ? "" : "s"}
+      </p>
+      <button type="button" onClick={() => onEdit(mesocycle.id)}>
+        Continue planning
+      </button>
+    </div>
+  );
+}
+
+export function HomePage({
+  onOpenSession,
+  onCreateMesocycle,
+  onEditMesocycle,
+}: {
+  onOpenSession: (sessionId: number) => void;
+  onCreateMesocycle: () => void;
+  onEditMesocycle: (mesocycleId: number) => void;
+}) {
   const { athlete, token, logout } = useAuth();
   const [mesocycles, setMesocycles] = useState<Mesocycle[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +72,7 @@ export function HomePage({ onOpenSession }: { onOpenSession: (sessionId: number)
   }
 
   const active = mesocycles?.find((m) => m.status === "active") ?? null;
+  const drafts = mesocycles?.filter((m) => m.status === "draft") ?? [];
 
   return (
     <div className="home-screen">
@@ -74,14 +104,17 @@ export function HomePage({ onOpenSession }: { onOpenSession: (sessionId: number)
           </button>
         </div>
       ) : (
-        mesocycles !== null && (
-          <p>
-            No active mesocycle. Create and start one via the API's{" "}
-            <code>/docs</code> page for now — there's no in-app creation
-            screen yet.
-          </p>
-        )
+        mesocycles !== null &&
+        drafts.length === 0 && <p>No active mesocycle yet — create one to get started.</p>
       )}
+
+      {drafts.map((draft) => (
+        <DraftCard key={draft.id} mesocycle={draft} onEdit={onEditMesocycle} />
+      ))}
+
+      <button type="button" onClick={onCreateMesocycle}>
+        New mesocycle
+      </button>
 
       <button type="button" className="link-button" onClick={logout}>
         Log out

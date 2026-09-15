@@ -179,3 +179,131 @@ button:disabled {
   gap: 12px;
   align-items: center;
 }
+
+/* Mesocycle builder */
+
+.builder-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 20px 16px 32px;
+  gap: 16px;
+  text-align: left;
+}
+
+.builder-screen label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 15px;
+}
+
+.builder-screen input,
+.builder-screen select {
+  font-size: 16px;
+  padding: 12px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+.builder-tabs {
+  display: flex;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.template-card,
+.prescription-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+}
+
+.template-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.template-card li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.exercise-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exercise-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+
+.exercise-picker-meta {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.add-exercise-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sets-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sets-editor-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.sets-editor-row select,
+.sets-editor-row input {
+  font-size: 15px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.prescription-week-table,
+.prescription-week-table tbody,
+.prescription-week-table tr,
+.prescription-week-table td {
+  display: block;
+  width: 100%;
+}
+
+.prescription-week-table tr {
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.prescription-week-table tr:first-child {
+  border-top: none;
+}

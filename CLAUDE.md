@@ -88,5 +88,5 @@ React + TypeScript + Vite on the frontend, plain component state for now
 change). Full rationale in `project-brief.md` §2.
 
 No offline support yet (Dexie/IndexedDB sync is explicitly deferred to its
-own milestone — see Open items). No mesocycle-creation UI yet either
-(currently created via the API's `/docs` page).
+own milestone — see Open items). Mesocycle creation now has an in-app UI
+(built 2026-09-15) — the exercise library itself is still `/docs`-only.
