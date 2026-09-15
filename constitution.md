@@ -1,6 +1,6 @@
 # Project Constitution
 
-*Last updated: 2026-08-29 (domain hierarchy corrected to drop the Program layer — see project-brief.md decisions log). This document rarely changes — it captures durable vision and principles, not current scope or tech decisions. Scope, constraints, and decisions live in `project-brief.md`.*
+*Last updated: 2026-09-15 (Recommendation engine example corrected — RIR to RPE, and the illustrative function name to the one actually implemented, `decide_progression`; see project-brief.md decisions log). This document rarely changes — it captures durable vision and principles, not current scope or tech decisions. Scope, constraints, and decisions live in `project-brief.md`.*
 
 ## 1. What This Is
 
@@ -23,8 +23,8 @@ These are different concepts with different lifecycles and must not be collapsed
 
 **Recommendation engine**
 - Deterministic and explainable first. No ML until there's a demonstrated need rules/statistics genuinely can't meet.
-- Every recommendation states *why* in plain language (e.g. "increased load because you hit the top of the rep range at target RIR on all sets"), not just a number.
-- Progression/deload logic is independently testable — `recommend_next_set(...)` runs and is unit-tested without a web server.
+- Every recommendation states *why* in plain language (e.g. "increased load because you hit the top of the rep range at target RPE on all sets"), not just a number.
+- Progression/deload logic is independently testable — `decide_progression(...)` runs and is unit-tested without a web server or database.
 
 **Offline-first, for real**
 - Logging a workout works with zero connectivity, using genuine local persistence — not a cached webpage.
