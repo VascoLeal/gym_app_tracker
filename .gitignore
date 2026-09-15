@@ -1,0 +1,14 @@
+# Root-level catch-all — backend/ and frontend/ each have their own
+# .gitignore for language-specific artifacts. This one only covers things
+# that could land at the repo root itself (OS/editor cruft, a stray .env).
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Local secrets, if ever created at the root instead of backend/ or frontend/
+.env
