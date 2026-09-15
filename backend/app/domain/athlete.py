@@ -7,8 +7,14 @@ core business object should be understandable and testable in complete
 isolation from how it's stored (infrastructure/) or how it's exposed over
 HTTP (api/).
 
-Later, this is where progression-engine logic like `recommend_next_set(...)`
-will live, operating on plain objects like this one.
+Note this translation is deliberately NOT applied everywhere — see
+project-brief.md's decisions log (2026-09-15) for why auth_service and
+exercise_service translate ORM rows to domain objects like this one, while
+mesocycle_service/session_service stay ORM-native. The progression engine's
+actual decision logic (application/progression_service.decide_progression)
+is still independently unit-testable without a database, per the
+constitution's requirement — it just doesn't operate on dataclasses from
+this domain/ package.
 """
 
 from __future__ import annotations
