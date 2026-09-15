@@ -15,6 +15,7 @@ from app.application.session_service import (
     MesocycleNotActive,
     SessionAlreadyInProgress,
     SessionNotFound,
+    SetPrescriptionMismatch,
     abandon_session,
     complete_session,
     get_prescription_for,
@@ -148,6 +149,11 @@ def log_set_route(
     except SessionNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Exercise not found in this session."
+        ) from exc
+    except SetPrescriptionMismatch as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="set_prescription_id doesn't belong to this exercise's slot for this week.",
         ) from exc
     return SetPerformanceResponse(
         id=s.id, set_prescription_id=s.set_prescription_id, set_number=s.set_number,

@@ -172,6 +172,37 @@ def test_abandon_session_does_not_advance_sessions_completed(client, mesocycle):
     assert retry.status_code == 201
 
 
+def test_log_set_rejects_a_set_prescription_id_from_a_different_slot(client, mesocycle):
+    _, push_prescription = _add_prescription(client, mesocycle, "Push A", 1)
+    _, pull_prescription = _add_prescription(client, mesocycle, "Pull A", 1)
+    session = client.post(f"/mesocycles/{mesocycle['id']}/sessions/start").json()
+    # Only Push A is in this session — it's next in the rotation.
+    performed_exercise_id = session["performed_exercises"][0]["id"]
+
+    own_set_id = push_prescription["sets"][0]["id"]
+    ok = client.post(
+        f"/performed-exercises/{performed_exercise_id}/sets",
+        json={
+            "set_prescription_id": own_set_id,
+            "actual_weight": 60.0, "actual_reps": 9, "actual_rpe": 8.5,
+        },
+    )
+    assert ok.status_code == 201
+
+    # A prescribed set from a different exercise slot (Pull A) must be
+    # rejected, not silently linked — it isn't a valid prescription for
+    # this performed exercise, regardless of whose mesocycle it belongs to.
+    foreign_set_id = pull_prescription["sets"][0]["id"]
+    rejected = client.post(
+        f"/performed-exercises/{performed_exercise_id}/sets",
+        json={
+            "set_prescription_id": foreign_set_id,
+            "actual_weight": 60.0, "actual_reps": 9, "actual_rpe": 8.5,
+        },
+    )
+    assert rejected.status_code == 422
+
+
 def test_exercise_swap_is_allowed_at_the_data_level(client, mesocycle, exercise_ids):
     _add_prescription(client, mesocycle, "Push A", 1)
     session = client.post(f"/mesocycles/{mesocycle['id']}/sessions/start").json()

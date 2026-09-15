@@ -46,6 +46,18 @@ class InvalidSessionState(Exception):
     pass
 
 
+class SetPrescriptionMismatch(Exception):
+    """Raised when a logged set's set_prescription_id doesn't belong to
+    this performed exercise's own template slot + week — e.g. a
+    prescription from a different exercise, a different week, or another
+    athlete's mesocycle entirely. Prevents an athlete's own performance
+    record from being linked to a prescription that isn't actually theirs
+    for this slot, even though a wrong-slot id and a cross-athlete id look
+    identical from here (both are just "not a valid prescription for this
+    performed exercise")."""
+    pass
+
+
 def start_session(db: Session, mesocycle_id: int, athlete_id: int) -> WorkoutSessionModel:
     """Starts a session for whatever current_position() says is next —
     the caller doesn't get to pick, per the fixed-rotation decision."""
@@ -111,6 +123,23 @@ def log_set(
     )
     if performed_exercise is None or performed_exercise.workout_session.mesocycle.athlete_id != athlete_id:
         raise SessionNotFound(performed_exercise_id)
+
+    if set_prescription_id is not None:
+        prescription_set = (
+            db.query(SetPrescriptionModel)
+            .filter(SetPrescriptionModel.id == set_prescription_id)
+            .first()
+        )
+        belongs_to_this_slot = (
+            prescription_set is not None
+            and performed_exercise.template_exercise_id is not None
+            and prescription_set.exercise_prescription.template_exercise_id
+            == performed_exercise.template_exercise_id
+            and prescription_set.exercise_prescription.week_id
+            == performed_exercise.workout_session.week_id
+        )
+        if not belongs_to_this_slot:
+            raise SetPrescriptionMismatch(set_prescription_id)
 
     existing_count = (
         db.query(SetPerformanceModel)
