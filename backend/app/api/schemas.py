@@ -50,6 +50,29 @@ class ExerciseResponse(BaseModel):
     supported_tempos: list[str]
 
 
+class MuscleContributionRequest(BaseModel):
+    muscle_name: str
+    # 1.0 = primary mover, 0.5 = trained at roughly half that degree, etc.
+    # See domain/exercise.py's MuscleContribution docstring.
+    contribution: float = Field(gt=0, le=1)
+
+
+class ExerciseCreateRequest(BaseModel):
+    name: str
+    description: str = ""
+    equipment_name: str
+    movement_category: str
+    exercise_type: str
+    notes: str = ""
+    muscles: list[MuscleContributionRequest] = Field(min_length=1)
+    supported_set_types: list[str] = Field(min_length=1)
+    supported_tempos: list[str] = Field(min_length=1)
+
+
+class ExerciseEditRequest(ExerciseCreateRequest):
+    pass
+
+
 # --- Mesocycle lifecycle ---
 
 

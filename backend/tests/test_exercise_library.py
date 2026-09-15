@@ -81,3 +81,100 @@ def test_bench_press_still_supports_warmup_sets_despite_no_warmup_flag(client):
 def test_get_nonexistent_exercise_returns_404(client):
     response = client.get("/exercises/99999")
     assert response.status_code == 404
+
+
+@pytest.fixture()
+def authed_client(client):
+    client.post(
+        "/auth/register",
+        json={"email": "librarian@example.com", "password": "correct-horse-battery"},
+    )
+    login = client.post(
+        "/auth/login",
+        json={"email": "librarian@example.com", "password": "correct-horse-battery"},
+    ).json()
+    client.headers["Authorization"] = f"Bearer {login['access_token']}"
+    return client
+
+
+def _new_exercise_body(**overrides):
+    body = {
+        "name": "Cable Face Pull",
+        "description": "",
+        "equipment_name": "Cable Machine",
+        "movement_category": "horizontal_pull",
+        "exercise_type": "isolation",
+        "notes": "",
+        "muscles": [
+            {"muscle_name": "Rear Delts", "contribution": 1.0},
+            {"muscle_name": "Traps", "contribution": 0.3},
+        ],
+        "supported_set_types": ["straight_set", "warmup_set"],
+        "supported_tempos": ["normal", "slow"],
+    }
+    body.update(overrides)
+    return body
+
+
+def test_create_exercise_requires_auth(client):
+    response = client.post("/exercises", json=_new_exercise_body())
+    assert response.status_code == 401
+
+
+def test_create_exercise_persists_muscles_set_types_and_tempos(authed_client):
+    response = authed_client.post("/exercises", json=_new_exercise_body())
+    assert response.status_code == 201
+    body = response.json()
+
+    fetched = authed_client.get(f"/exercises/{body['id']}").json()
+    contributions = {m["muscle_name"]: m["contribution"] for m in fetched["muscles"]}
+    assert contributions == {"Rear Delts": 1.0, "Traps": 0.3}
+    assert set(fetched["supported_set_types"]) == {"straight_set", "warmup_set"}
+    assert set(fetched["supported_tempos"]) == {"normal", "slow"}
+
+
+def test_create_exercise_rejects_duplicate_name(authed_client):
+    authed_client.post("/exercises", json=_new_exercise_body())
+    response = authed_client.post("/exercises", json=_new_exercise_body())
+    assert response.status_code == 409
+
+
+def test_create_exercise_rejects_unknown_muscle(authed_client):
+    body = _new_exercise_body(
+        muscles=[{"muscle_name": "Not A Real Muscle", "contribution": 1.0}]
+    )
+    response = authed_client.post("/exercises", json=body)
+    assert response.status_code == 422
+
+
+def test_edit_exercise_replaces_muscles_and_renames(authed_client):
+    created = authed_client.post("/exercises", json=_new_exercise_body()).json()
+
+    response = authed_client.patch(
+        f"/exercises/{created['id']}",
+        json=_new_exercise_body(
+            name="Cable Face Pull (renamed)",
+            muscles=[{"muscle_name": "Lateral Delts", "contribution": 0.6}],
+        ),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["name"] == "Cable Face Pull (renamed)"
+    assert [m["muscle_name"] for m in body["muscles"]] == ["Lateral Delts"]
+
+
+def test_edit_nonexistent_exercise_returns_404(authed_client):
+    response = authed_client.patch("/exercises/99999", json=_new_exercise_body())
+    assert response.status_code == 404
+
+
+def test_edit_exercise_rejects_renaming_to_an_existing_name(authed_client):
+    authed_client.post("/exercises", json=_new_exercise_body())
+    other = authed_client.post(
+        "/exercises", json=_new_exercise_body(name="Another Exercise")
+    ).json()
+
+    response = authed_client.patch(
+        f"/exercises/{other['id']}", json=_new_exercise_body(name="Cable Face Pull")
+    )
+    assert response.status_code == 409

@@ -200,13 +200,20 @@ button:disabled {
 }
 
 .builder-screen input,
-.builder-screen select {
+.builder-screen select,
+.builder-screen textarea {
   font-size: 16px;
   padding: 12px 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--code-bg);
   color: var(--text-h);
+  font-family: inherit;
+}
+
+.builder-screen textarea {
+  resize: vertical;
+  min-height: 60px;
 }
 
 .builder-tabs {
@@ -306,4 +313,57 @@ button:disabled {
 
 .prescription-week-table tr:first-child {
   border-top: none;
+}
+
+/* Exercise library */
+
+.exercise-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.checkbox-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+}
+
+.muscle-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.muscle-group-header {
+  margin: 10px 0 2px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.muscle-group-header:first-child {
+  margin-top: 0;
+}
+
+.muscle-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 15px;
 }

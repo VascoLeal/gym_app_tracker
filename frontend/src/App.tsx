@@ -6,6 +6,7 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { HomePage } from "./pages/HomePage";
 import { WorkoutPage } from "./pages/WorkoutPage";
 import { MesocycleBuilderPage } from "./pages/MesocycleBuilderPage";
+import { ExerciseLibraryPage } from "./pages/ExerciseLibraryPage";
 import "./App.css";
 
 // Added with the mesocycle builder milestone: that screen has enough of its
@@ -45,8 +46,14 @@ function HomeRoute() {
       onOpenSession={(sessionId) => navigate(`/workout/${sessionId}`)}
       onCreateMesocycle={() => navigate("/mesocycles/new")}
       onEditMesocycle={(mesocycleId) => navigate(`/mesocycles/${mesocycleId}/edit`)}
+      onOpenExerciseLibrary={() => navigate("/exercise-library")}
     />
   );
+}
+
+function ExerciseLibraryRoute() {
+  const navigate = useNavigate();
+  return <ExerciseLibraryPage onDone={() => navigate("/home")} />;
 }
 
 function WorkoutRoute() {
@@ -121,6 +128,14 @@ function AppContent() {
         element={
           <RequireAuth>
             <MesocycleBuilderRoute />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/exercise-library"
+        element={
+          <RequireAuth>
+            <ExerciseLibraryRoute />
           </RequireAuth>
         }
       />

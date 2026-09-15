@@ -29,10 +29,12 @@ export function HomePage({
   onOpenSession,
   onCreateMesocycle,
   onEditMesocycle,
+  onOpenExerciseLibrary,
 }: {
   onOpenSession: (sessionId: number) => void;
   onCreateMesocycle: () => void;
   onEditMesocycle: (mesocycleId: number) => void;
+  onOpenExerciseLibrary: () => void;
 }) {
   const { athlete, token, logout } = useAuth();
   const [mesocycles, setMesocycles] = useState<Mesocycle[] | null>(null);
@@ -114,6 +116,10 @@ export function HomePage({
 
       <button type="button" onClick={onCreateMesocycle}>
         New mesocycle
+      </button>
+
+      <button type="button" className="link-button" onClick={onOpenExerciseLibrary}>
+        Exercise library
       </button>
 
       <button type="button" className="link-button" onClick={logout}>
