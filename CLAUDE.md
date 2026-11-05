@@ -3,19 +3,19 @@
 A mobile-first hypertrophy training app (FastAPI backend + React/TypeScript
 frontend), built solo for personal use (author + partner).
 
-Full context lives in two living documents at this repo's root. Read them
+Full context lives in two living documents in `docs/`. Read them
 at the start of every session — don't just skim, actually treat their
 content as binding:
 
-@constitution.md
-@project-brief.md
+@docs/constitution.md
+@docs/project-brief.md
 
-- `constitution.md` — durable vision, principles, and the working
+- `docs/constitution.md` — durable vision, principles, and the working
   agreement. Rarely changes.
-- `project-brief.md` — living scope, current decisions, open items. This
+- `docs/project-brief.md` — living scope, current decisions, open items. This
   changes constantly and is the source of truth for "what's actually
   decided vs. still open" — check it before assuming anything about scope.
-- `architecture-discovery.md` (also at repo root, not auto-imported here
+- `docs/architecture-discovery.md` (not auto-imported here
   to save context) — a one-time tech-stack rationale doc from early in the
   project. Its conclusions are already folded into `project-brief.md` §2;
   only open it directly if you need the underlying reasoning for *why* a

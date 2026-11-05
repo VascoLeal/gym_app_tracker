@@ -1,7 +1,7 @@
 """
 Domain model for Mesocycle down through Set Prescription. No Program layer
 — mesocycles belong directly to the athlete (decided 2026-08-29, see
-project-brief.md decisions log).
+docs/project-brief.md decisions log).
 
 "Week" here is NOT a calendar concept. It's derived from how many training
 days the athlete has actually completed since the mesocycle started

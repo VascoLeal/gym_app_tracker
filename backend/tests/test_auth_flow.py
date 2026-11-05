@@ -5,7 +5,7 @@ persistence -> argon2 hashing — without needing a live Postgres connection.
 
 This is deliberately the ONE place SQLite is used for anything beyond a
 one-off sanity check: the app itself always targets Postgres per
-project-brief.md; this test just swaps the engine so it's fast and doesn't
+docs/project-brief.md; this test just swaps the engine so it's fast and doesn't
 require a real database to run `pytest`.
 """
 

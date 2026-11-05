@@ -8,7 +8,7 @@ isolation from how it's stored (infrastructure/) or how it's exposed over
 HTTP (api/).
 
 Note this translation is deliberately NOT applied everywhere — see
-project-brief.md's decisions log (2026-09-15) for why auth_service and
+docs/project-brief.md's decisions log (2026-09-15) for why auth_service and
 exercise_service translate ORM rows to domain objects like this one, while
 mesocycle_service/session_service stay ORM-native. The progression engine's
 actual decision logic (application/progression_service.decide_progression)

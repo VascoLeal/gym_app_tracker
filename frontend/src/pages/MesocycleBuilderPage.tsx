@@ -73,7 +73,7 @@ function TemplatesSection({
   );
 
   // Foundational-shape edits (which exercises, which days) are only allowed
-  // before the mesocycle starts — per project-brief.md's restriction
+  // before the mesocycle starts — per docs/project-brief.md's restriction
   // matrix, since the rotation/RPE-ramp math is built around a fixed shape.
   const isLocked = mesocycle.status !== "draft";
 

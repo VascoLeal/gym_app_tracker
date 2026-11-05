@@ -26,7 +26,7 @@ v1 scope: only weight is adjusted. Rep range and set count stay fixed for
 the whole mesocycle (though still editable by hand — see
 mesocycle_service — just not something the algorithm changes on its own).
 Volume progression (adding sets across weeks) is deferred — see
-project-brief.md.
+docs/project-brief.md.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ from app.infrastructure.mesocycle_models import (
 from app.infrastructure.session_models import PerformedExerciseModel, SetPerformanceModel
 
 # Algorithmic design decisions (heuristics), not scientifically derived
-# constants — see constitution.md §4, fitness-science honesty. Tune freely.
+# constants — see docs/constitution.md §4, fitness-science honesty. Tune freely.
 RPE_INCREASE_TOLERANCE = 1.0   # actual can run up to this many points over target and still increase
 RPE_DECREASE_THRESHOLD = 2.0   # actual must run at least this many points over target (every set) to decrease on RPE alone
 DELOAD_WEIGHT_FACTOR = 0.5     # reduced_load deload weeks: ~50% of the prior week's weight

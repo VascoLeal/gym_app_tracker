@@ -85,7 +85,7 @@ def create_exercise_route(
     current_athlete: AthleteModel = Depends(get_current_athlete),
 ) -> ExerciseResponse:
     # The library itself isn't athlete-owned (it's the shared Exercise
-    # Library per constitution.md §2) — current_athlete is required only to
+    # Library per docs/constitution.md §2) — current_athlete is required only to
     # prove the caller is a logged-in athlete, not to attribute ownership.
     del current_athlete
     try:

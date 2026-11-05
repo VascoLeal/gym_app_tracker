@@ -2,7 +2,7 @@
 SQLAlchemy ORM models for the exercise library.
 
 Muscle, Equipment, SetType, Tempo, MovementCategory, and ExerciseType are
-ALL reference tables now (not Python enums) — see project-brief.md's
+ALL reference tables now (not Python enums) — see docs/project-brief.md's
 decisions log for why movement_category/exercise_type moved from enums to
 tables. The pattern is now uniform: every one of these grows by adding a
 row, never by shipping code.

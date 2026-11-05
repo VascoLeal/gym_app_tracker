@@ -2,7 +2,7 @@
 SQLAlchemy ORM models — the persistence-layer shape of our data. This is
 deliberately a *different* class from app.domain.athlete.Athlete: this one
 knows about database columns and constraints; that one knows about business
-rules. See architecture-discovery.md §2.2 for why we're not using SQLModel
+rules. See docs/architecture-discovery.md §2.2 for why we're not using SQLModel
 to merge the two.
 """
 

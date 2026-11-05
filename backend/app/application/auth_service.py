@@ -4,7 +4,7 @@ per the constitution's security baseline) and translating between the ORM
 model (infrastructure) and the domain object (domain.athlete.Athlete).
 
 Deliberately NOT doing session/JWT token issuance here — that's the Auth
-milestone's job (see project-brief.md §2 and §3). This milestone only
+milestone's job (see docs/project-brief.md §2 and §3). This milestone only
 proves: password gets hashed, athlete gets stored, login can verify it.
 """
 

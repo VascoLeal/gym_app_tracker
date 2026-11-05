@@ -2,7 +2,7 @@
 JWT access tokens. v1 scope, deliberately: ONE token per login, no refresh
 rotation — simpler to build and reason about while learning the frontend
 side of this from zero. Revisit if/when a real security hardening pass
-happens; see project-brief.md decisions log.
+happens; see docs/project-brief.md decisions log.
 
 HS256 (symmetric signing) is enough here — there's a single backend
 verifying its own tokens, no need for the asymmetric-key complexity RS256
