@@ -1,0 +1,108 @@
+"""
+SQLAlchemy ORM models for WorkoutSession -> PerformedExercise ->
+SetPerformance — the performed side, paired against the planning
+hierarchy in mesocycle_models.py.
+"""
+
+from datetime import datetime, timezone
+
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.infrastructure.database import Base
+from app.infrastructure.exercise_models import ExerciseModel
+from app.infrastructure.mesocycle_models import (
+    MesocycleModel,
+    SetPrescriptionModel,
+    TemplateExerciseModel,
+    WeekModel,
+    WorkoutTemplateModel,
+)
+
+
+class WorkoutSessionModel(Base):
+    __tablename__ = "workout_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mesocycle_id: Mapped[int] = mapped_column(ForeignKey("mesocycles.id", ondelete="CASCADE"))
+    week_id: Mapped[int] = mapped_column(ForeignKey("weeks.id", ondelete="CASCADE"))
+    workout_template_id: Mapped[int] = mapped_column(
+        ForeignKey("workout_templates.id", ondelete="CASCADE")
+    )
+    status: Mapped[str] = mapped_column(String(20), default="in_progress")
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    mesocycle: Mapped[MesocycleModel] = relationship()
+    week: Mapped[WeekModel] = relationship()
+    workout_template: Mapped[WorkoutTemplateModel] = relationship()
+    performed_exercises: Mapped[list["PerformedExerciseModel"]] = relationship(
+        back_populates="workout_session", cascade="all, delete-orphan",
+        order_by="PerformedExerciseModel.order_performed",
+    )
+
+
+class PerformedExerciseModel(Base):
+    __tablename__ = "performed_exercises"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workout_session_id: Mapped[int] = mapped_column(
+        ForeignKey("workout_sessions.id", ondelete="CASCADE")
+    )
+    # Nullable: an exercise added on the fly with no corresponding plan slot
+    # — and, symmetrically, what this degrades to if the plan slot it
+    # pointed at is later removed. Historical performance data outlives the
+    # plan, so this is SET NULL rather than CASCADE.
+    template_exercise_id: Mapped[int | None] = mapped_column(
+        ForeignKey("template_exercises.id", ondelete="SET NULL"), nullable=True
+    )
+    # The exercise ACTUALLY performed — may differ from the template
+    # slot's planned exercise (a swap), which is why this is its own FK
+    # rather than just following template_exercise.exercise_id.
+    exercise_id: Mapped[int] = mapped_column(ForeignKey("exercises.id"))
+    order_performed: Mapped[int] = mapped_column(Integer)
+
+    workout_session: Mapped[WorkoutSessionModel] = relationship(
+        back_populates="performed_exercises"
+    )
+    template_exercise: Mapped[TemplateExerciseModel | None] = relationship()
+    exercise: Mapped[ExerciseModel] = relationship()
+    sets: Mapped[list["SetPerformanceModel"]] = relationship(
+        back_populates="performed_exercise", cascade="all, delete-orphan",
+        order_by="SetPerformanceModel.set_number",
+    )
+
+
+class SetPerformanceModel(Base):
+    __tablename__ = "set_performances"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    performed_exercise_id: Mapped[int] = mapped_column(
+        ForeignKey("performed_exercises.id", ondelete="CASCADE")
+    )
+    # Nullable: an added set with no prescription behind it — and what this
+    # degrades to if the prescription it logged against is later edited
+    # away. Same "historical performance outlives the plan" reasoning as
+    # PerformedExercise.template_exercise_id above.
+    set_prescription_id: Mapped[int | None] = mapped_column(
+        ForeignKey("set_prescriptions.id", ondelete="SET NULL"), nullable=True
+    )
+    set_number: Mapped[int] = mapped_column(Integer)
+    actual_weight: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Float, not Integer: a partial rep is expressed as e.g. 8.5 rather
+    # than a separate partial_reps field (author's call, 2026-08-30).
+    actual_reps: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual_rpe: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Optional free-text escape hatch for anything worth remembering that
+    # doesn't fit weight/reps/RPE — e.g. "did a drop set instead", "used
+    # the 25s, 30s were taken". Opt-in, not a required structured field.
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    performed_exercise: Mapped[PerformedExerciseModel] = relationship(
+        back_populates="sets"
+    )
+    set_prescription: Mapped[SetPrescriptionModel | None] = relationship()

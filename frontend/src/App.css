@@ -1,0 +1,369 @@
+/* Mobile-first: these are the base (small-screen) styles, not overrides
+   of a desktop default — matches the constitution's "workout screen is
+   the most important screen" priority. */
+
+.auth-screen,
+.home-screen,
+.loading-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px;
+  gap: 16px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.auth-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  font-size: 15px;
+}
+
+/* Large touch targets throughout — no fiddly small taps mid-workout. */
+.auth-form input {
+  font-size: 16px; /* iOS Safari zooms in on focus if inputs are under 16px */
+  padding: 14px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+  color: var(--text-h);
+}
+
+.auth-form input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button {
+  font-size: 16px;
+  padding: 14px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--text-h);
+  cursor: pointer;
+  min-height: 48px; /* comfortable tap target */
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  min-height: unset;
+  color: var(--accent);
+  text-decoration: underline;
+  font-size: inherit;
+}
+
+.auth-error {
+  color: #f87171;
+  font-size: 14px;
+  margin: 0;
+}
+
+.auth-switch {
+  font-size: 14px;
+}
+
+.home-subtitle {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.mesocycle-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+}
+
+.workout-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 20px 16px 32px;
+  gap: 20px;
+}
+
+.exercise-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+  text-align: left;
+}
+
+.set-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.set-row:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.set-row-done {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--text);
+}
+
+.set-label {
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+.set-target {
+  font-weight: normal;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.set-note {
+  font-size: 13px;
+  font-style: italic;
+}
+
+.set-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.set-inputs input,
+.set-note-input {
+  font-size: 16px; /* iOS Safari zoom-on-focus guard, same as auth inputs */
+  padding: 12px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.workout-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Mesocycle builder */
+
+.builder-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 20px 16px 32px;
+  gap: 16px;
+  text-align: left;
+}
+
+.builder-screen label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 15px;
+}
+
+.builder-screen input,
+.builder-screen select,
+.builder-screen textarea {
+  font-size: 16px;
+  padding: 12px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+  color: var(--text-h);
+  font-family: inherit;
+}
+
+.builder-screen textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.builder-tabs {
+  display: flex;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.template-card,
+.prescription-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--code-bg);
+}
+
+.template-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.template-card li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.exercise-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exercise-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+
+.exercise-picker-meta {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.add-exercise-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sets-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sets-editor-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.sets-editor-row select,
+.sets-editor-row input {
+  font-size: 15px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.prescription-week-table,
+.prescription-week-table tbody,
+.prescription-week-table tr,
+.prescription-week-table td {
+  display: block;
+  width: 100%;
+}
+
+.prescription-week-table tr {
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.prescription-week-table tr:first-child {
+  border-top: none;
+}
+
+/* Exercise library */
+
+.exercise-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.checkbox-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+}
+
+.muscle-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.muscle-group-header {
+  margin: 10px 0 2px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.muscle-group-header:first-child {
+  margin-top: 0;
+}
+
+.muscle-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 15px;
+}
