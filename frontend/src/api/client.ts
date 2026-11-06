@@ -1,7 +1,8 @@
 // The backend's URL, read from the environment (see .env / .env.example).
 // import.meta.env is Vite's equivalent of process.env — anything prefixed
-// VITE_ gets baked into the browser bundle at build time.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+// VITE_ gets baked into the browser bundle at build time. A trailing slash is
+// removed because every path below already starts with one.
+export const API_BASE_URL: string = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 /**
  * A custom Error subclass so callers can check `error.status` to react

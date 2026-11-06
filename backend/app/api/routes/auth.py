@@ -10,6 +10,7 @@ from app.application.auth_service import (
     register_athlete,
 )
 from app.auth_tokens import create_access_token
+from app.config import Settings, get_settings
 from app.infrastructure.database import get_db
 from app.infrastructure.models import AthleteModel
 
@@ -25,7 +26,17 @@ def _athlete_response(athlete) -> AthleteResponse:
 @router.post(
     "/register", response_model=AthleteResponse, status_code=status.HTTP_201_CREATED
 )
-def register(body: RegisterRequest, db: Session = Depends(get_db)) -> AthleteResponse:
+def register(
+    body: RegisterRequest,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> AthleteResponse:
+    if not settings.can_register(body.email):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration is closed.",
+        )
+
     try:
         athlete = register_athlete(db, body.email, body.password)
     except EmailAlreadyRegistered as exc:

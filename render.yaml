@@ -1,0 +1,52 @@
+# Render Blueprint: the hosting setup as code. Render reads this file when the
+# repo is connected and creates both services. See docs/deployment.md.
+
+services:
+  - type: web
+    name: voacs-api
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: backend
+    # The free plan has no pre-deploy command, shell or one-off jobs, so
+    # migrations and the seed run here. The seed is safe to repeat.
+    buildCommand: >-
+      uv sync --locked --no-dev
+      && uv run --no-sync alembic upgrade head
+      && uv run --no-sync python -m app.seed
+    startCommand: uv run --no-sync uvicorn app.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.10
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      # sync: false means Render asks for the value once, on creation, and it
+      # never lives in this repo.
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: REGISTRATION_ALLOWED_EMAILS
+        sync: false
+
+  - type: web
+    name: voacs
+    runtime: static
+    rootDir: frontend
+    # --include=dev because the build itself needs TypeScript and Vite.
+    buildCommand: npm ci --include=dev && npm run build
+    staticPublishPath: dist
+    autoDeployTrigger: commit
+    # The app has its own routes (/home, /workout/3). Without this rewrite,
+    # refreshing on one of them asks the host for a file that doesn't exist.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: 24.20.0
+      - key: VITE_API_BASE_URL
+        sync: false

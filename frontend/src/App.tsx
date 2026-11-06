@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Routes, Route, useNavigate, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
+import { ConnectingScreen } from "./components/ConnectingScreen";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { HomePage } from "./pages/HomePage";
@@ -74,11 +75,21 @@ function MesocycleBuilderRoute() {
 }
 
 function AppContent() {
-  const { isLoading } = useAuth();
+  const { isLoading, serverUnreachable, retryConnection } = useAuth();
   if (isLoading) {
-    // Shown briefly on app start while we check localStorage for a saved
-    // token and verify it's still valid against the backend.
-    return <div className="loading-screen">Loading…</div>;
+    // Shown on app start while the server wakes and any saved token is checked.
+    return <ConnectingScreen />;
+  }
+
+  if (serverUnreachable) {
+    return (
+      <div className="loading-screen">
+        <p>Can't reach the server. Check your connection and try again.</p>
+        <button type="button" onClick={retryConnection}>
+          Try again
+        </button>
+      </div>
+    );
   }
 
   return (

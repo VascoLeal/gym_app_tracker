@@ -244,17 +244,57 @@ Unit-test the engine without a database, covering at least:
 - **Q6. Reordering UI.** Up/down buttons (proposed) or drag-and-drop?
 - **Q7. Viewer scope.** Should the viewer also open completed and abandoned mesocycles, or only the active one for now?
 
+### Answers (2026-11-06)
+
+**Settled by the author:**
+
+- **Q1. Muscles.** One parent muscle (chest, not upper/mid/lower chest), easy to make granular again later. Granular rows stay in the table, hidden, with `parent_muscle_id` set. An exercise that currently links two parts of one muscle keeps the highest contribution. No new muscles for now.
+- **Q3.** Block the start if there are no training days or any slot has no week 1 prescription.
+- **Q4.** Manual edits are tracked per exercise-week.
+- **Q5.** Halving keeps the heavy end. "Hit" means the bottom of the rep range on all working sets. The test uses +1 step. If the last normal week's decision was a decrease, the test stays at that week's weight.
+- **Q6.** Up/down buttons.
+- **Q7.** The viewer opens the active mesocycle only for now, built so it can show other statuses later.
+- **Phone testing.** Testing so far was on a PC; the phone could not reach `localhost:5173`. M0 is therefore required before any milestone can be verified on a phone.
+- **Prefill (supersedes A1 and E1's reps/RPE prefill).** Weight prefills as a real value. Reps and RPE appear as faint placeholders and must be entered, so one tap can't log a result nobody performed.
+- **Existing data.** Everything logged so far is test data and may be removed.
+- **A3.** The current exercise form asks for set types and tempos but has no rep range field. All three belong to the set prescription, where rep range already is.
+- **Partial sessions.** If any working set is unlogged, the decision is hold.
+- **Terminology.** Keep "Week", shown as "Week 3 · Day 2 of 4".
+- **Same exercise twice in a block.** G2 matches by training day + exercise.
+- **Editing logged sets.** Deferred.
+- **Rep-range top with RPE ≥ target + 2.** Hold, as the code does today. F2's "−1 step" wording is corrected to this.
+- **Naming.** `deload_strategy` becomes `final_week_strategy` everywhere (table, column, API, frontend), and `none` becomes `normal`. `Week.is_deload` keeps its name because it still means what it says.
+- **Draft reordering.** Keep it, with up/down buttons and the active mesocycle pinned first.
+- **Q2. Adjustment base.** Step each set from the weight actually lifted in it.
+- **Choosing the next mesocycle (replaces D8's and D-1's flag).** The top draft is next, shown as "Up next". There is no flag, and any draft can still be started from its own screen.
+- **Shape edits after start.** Blocked, not confirmed. Names and future weeks' sets, reps and weights stay editable. A "replace exercise" feature can follow if an injury mid-block makes it necessary.
+
 ---
 
 ## 4. Milestone plan
 
-_Suggested order. Claude Code may propose a different one. Replace this section with the approved plan._
+_Approved by the author, 2026-11-06. One milestone per session, each independently testable._
 
-1. **Bugs and quick wins:** A1, A3 (UI part), C1 cancel button, C2, E1 (show prescribed sets, per-set prefill, no RPE on warm-ups, layout).
-2. **Exercise library simplification:** B1, including the non-destructive migration and the constitution update.
-3. **Lifecycle and navigation:** the rest of C1, D-1, D-2 (read-only parts), D-3 Stop and Drop, D-4.
-4. **Progression redesign:** design pass first, then A2 confirmation, F1–F4, C3, C4, the editable parts of D-2, and E1's reason display.
-5. **Block transitions:** G1, G2, G3, D-3 Restart.
+**Deadline:** the Whoop subscription ends around early December 2026. If time runs out, cut M6 first, then the C4 extras.
+
+| Status | # | Milestone | Contents |
+|---|---|---|---|
+| ◐ | M0 | Reach it on a phone | Hosting and HTTPS; CORS from an environment variable; basic PWA manifest; a separate production database, seeded and empty, so test data stays in dev; registration limited to named emails; a sleeping server no longer logs anyone out. Code is done; the live deploy and phone check in [`deployment.md`](../deployment.md) remain. |
+| ☐ | M1 | Trustworthy workout page | A1 with a regression test; E1 without reasons; no RPE on warm-ups; log each set against its own `set_prescription_id`; reject sets logged on a session that isn't in progress; C1 Cancel; C2 buttons on drafts. |
+| ☐ | M2 | Exercise library | A3 and B1: coarse muscles, `parent_muscle_id`, remove supported set types and tempos, update the seed data; explicit edit to `constitution.md` §3. |
+| ☐ | M3 | Lifecycle and navigation | Rest of C1, including creating with no days and moving to the draft's URL so a refresh keeps it; rename to `final_week_strategy` and `normal`; D-1; read-only D-2 with a new sessions endpoint; D-3 Stop and Delete, which also close any open session; D-4; start guards (Q3). Lock fixes: lock per slot + week once that session is completed, and apply the shape-edit decision. |
+| ☐ | M4a | Engine design pass | Rule table and test-case list only, for the author's sign-off. No engine code. |
+| ☐ | M4b | Engine | A2; F1–F4; G1, including `strength_test` in the Final week options; per-set logic; `source` and `reason` columns; hold on partial sessions; dumbbell steps that land on every loadable weight; run the engine in the same transaction as session completion. Regenerate prescriptions by updating rows in place, so IDs stay stable for offline logs. |
+| ☐ | M4c | Planning UI | C3; C4; editable D-2 with "Reset to auto"; E1 reasons. |
+| ☐ | M5 | Offline | Dexie queue and triggered sync, per `project-brief.md` §2. May take two sessions. |
+| ☐ | M6 | Block transitions | G2; G3; D-3 Restart. |
+
+**Constraints across milestones:**
+
+- Training rules stay on the server. That includes projection, halving and position fields such as the current day and days per week.
+- Once M0 is live, production data is real: every later migration must preserve it.
+- Avoid logging real training until M1 is done, because A1 can record the wrong weights. Engine bugs remain until M4b, so check targets before relying on them.
+- Log these reversals when each is implemented: Restart, muscle granularity, supported set types, copy-forward, and the Next flag if replaced.
 
 ---
 

@@ -20,6 +20,34 @@ class Settings(BaseSettings):
     jwt_secret_key: str
     jwt_expiry_days: int = 30
 
+    # Browsers only let these exact origins (scheme + host + port) call the
+    # API. Comma-separated, because env vars are plain strings. Production
+    # sets its deployed frontend's URL; the default suits local Vite.
+    cors_allowed_origins: str = "http://localhost:5173"
+
+    # Comma-separated emails allowed to register. The deployed API is on the
+    # public internet and the exercise library is shared, so production names
+    # its users here. Empty means anyone may register, for local development.
+    registration_allowed_emails: str = ""
+
+    @property
+    def cors_origins(self) -> list[str]:
+        # A trailing slash is an easy paste mistake, and an origin containing
+        # one never matches what a browser sends.
+        return [
+            origin.strip().rstrip("/")
+            for origin in self.cors_allowed_origins.split(",")
+            if origin.strip()
+        ]
+
+    def can_register(self, email: str) -> bool:
+        allowed = {
+            entry.strip().lower()
+            for entry in self.registration_allowed_emails.split(",")
+            if entry.strip()
+        }
+        return not allowed or email.strip().lower() in allowed
+
 
 @lru_cache
 def get_settings() -> Settings:

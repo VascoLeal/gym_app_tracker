@@ -11,6 +11,8 @@ import {
   registerAthlete,
   type Athlete,
 } from "../api/auth";
+import { ApiError } from "../api/client";
+import { waitForServer } from "../api/serverStatus";
 
 const TOKEN_STORAGE_KEY = "voacs_access_token";
 
@@ -20,7 +22,9 @@ const TOKEN_STORAGE_KEY = "voacs_access_token";
 interface AuthContextValue {
   athlete: Athlete | null;
   token: string | null;
-  isLoading: boolean; // true while we're checking a stored token on first load
+  isLoading: boolean; // true while waking the server and checking a stored token
+  serverUnreachable: boolean; // the server never answered; any saved login is kept
+  retryConnection: () => void;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => void;
@@ -35,31 +39,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [athlete, setAthlete] = useState<Athlete | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [serverUnreachable, setServerUnreachable] = useState(false);
+  const [connectionAttempt, setConnectionAttempt] = useState(0);
 
-  // useEffect with an empty dependency array ([]) runs ONCE, right after
-  // the component first renders — the standard place to do "on app start"
-  // work like checking for a previously-saved login.
+  // useEffect runs after the first render, and again whenever a value in its
+  // dependency array changes — here, when "Try again" bumps connectionAttempt.
+  // Its cleanup sets `cancelled`, so an outdated run can't overwrite state.
   useEffect(() => {
-    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!storedToken) {
+    let cancelled = false;
+
+    async function connect() {
+      const serverIsUp = await waitForServer();
+      if (cancelled) return;
+      if (!serverIsUp) {
+        setServerUnreachable(true);
+        setIsLoading(false);
+        return;
+      }
+
+      const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+      if (storedToken) {
+        // A stored token might be expired or otherwise invalid (e.g. the
+        // JWT_SECRET_KEY changed) — verify it against /auth/me rather than
+        // trusting it blindly. Only a 401 means the token is bad. Any other
+        // failure says nothing about it, so it must not log the athlete out.
+        try {
+          const fetchedAthlete = await fetchCurrentAthlete(storedToken);
+          if (cancelled) return;
+          setToken(storedToken);
+          setAthlete(fetchedAthlete);
+        } catch (err) {
+          if (cancelled) return;
+          if (err instanceof ApiError && err.status === 401) {
+            localStorage.removeItem(TOKEN_STORAGE_KEY);
+          } else {
+            setServerUnreachable(true);
+          }
+        }
+      }
       setIsLoading(false);
-      return;
     }
 
-    // A stored token might be expired or otherwise invalid (e.g. the
-    // JWT_SECRET_KEY changed) — verify it against /auth/me rather than
-    // trusting it blindly, so a stale token doesn't silently keep failing
-    // every real API call later.
-    fetchCurrentAthlete(storedToken)
-      .then((fetchedAthlete) => {
-        setToken(storedToken);
-        setAthlete(fetchedAthlete);
-      })
-      .catch(() => {
-        localStorage.removeItem(TOKEN_STORAGE_KEY);
-      })
-      .finally(() => setIsLoading(false));
-  }, []);
+    connect();
+    return () => {
+      cancelled = true;
+    };
+  }, [connectionAttempt]);
+
+  function retryConnection() {
+    setServerUnreachable(false);
+    setIsLoading(true);
+    setConnectionAttempt((attempt) => attempt + 1);
+  }
 
   async function login(email: string, password: string) {
     const result = await loginAthlete(email, password);
@@ -84,7 +115,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ athlete, token, isLoading, login, register, logout }}
+      value={{
+        athlete,
+        token,
+        isLoading,
+        serverUnreachable,
+        retryConnection,
+        login,
+        register,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

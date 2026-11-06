@@ -77,7 +77,11 @@ Frontend (from `frontend/`):
 npm install     # install dependencies
 npm run dev     # dev server, http://localhost:5173
 npm run build   # type-check + production build
+npm test        # run the test suite (Vitest)
 ```
+
+Deployment: `render.yaml` at the root, runbook in `docs/deployment.md`. Every
+push to `main` deploys to production and runs migrations.
 
 ## Current stack
 
