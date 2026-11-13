@@ -84,7 +84,7 @@ Either way the frontend's address changes, which has two side effects. Each addr
 3. Register with your own email. You should land on Home.
 4. Refresh the page. You should stay on Home, not get a "Not Found" page.
 5. Install it:
-   - **Android (Chrome):** menu → **Add to Home screen** or **Install app**.
+   - **Android:** open the address in **Chrome**, then menu → **Add to Home screen** or **Install app**. Use Chrome even if another browser is your default. Some other browsers, such as Samsung Internet, build the app's Android package themselves, and Google Play Protect blocks it as "built for an older version of Android". Don't override that warning; install from Chrome instead.
    - **iPhone (Safari):** Share → **Add to Home Screen**. iOS never prompts for this by itself.
 6. Open it from the icon. It should show the barbell icon and open without a browser address bar.
 7. Close it, wait at least 20 minutes, and open it again. It should say the server is waking, then reach Home **still logged in**.
@@ -109,6 +109,7 @@ Seeing `{"detail":"Not Found"}` at `https://voacs-api.onrender.com/` is expected
 | "Can't reach the server" on every attempt | Wrong `VITE_API_BASE_URL`, or the backend is down | Check the value, redeploy the frontend, and read the backend's logs |
 | The app won't load data, and the browser console mentions CORS | `CORS_ALLOWED_ORIGINS` doesn't match the frontend's URL | It must be `https://` plus the host, with no path |
 | Frontend build fails with `VITE_API_BASE_URL must be set` | The variable is missing | Add it and redeploy |
+| Play Protect: "Unsafe app blocked … built for an older version of Android" | The install was started from a browser other than Chrome | Remove any half-installed icon, then install from Chrome |
 | "Registration is closed" for an invited user | Their email isn't on the list | Fix `REGISTRATION_ALLOWED_EMAILS` on `voacs-api` |
 
 ## Limits of the free plan
